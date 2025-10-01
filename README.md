@@ -1,1 +1,1 @@
-# qgis-plugin-moe-geoportal-loader
+# MOE Geoportal Loader

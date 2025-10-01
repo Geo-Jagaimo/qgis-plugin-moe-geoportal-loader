@@ -1,0 +1,1 @@
+# qgis-plugin-moe-geoportal-loader

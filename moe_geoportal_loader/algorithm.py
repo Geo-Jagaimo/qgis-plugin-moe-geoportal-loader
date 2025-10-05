@@ -1,7 +1,8 @@
 from qgis.core import (
+    QgsFeatureSink,
     QgsProcessingAlgorithm,
     QgsProcessingParameterEnum,
-    QgsProject,
+    QgsProcessingParameterFeatureSink,
     QgsVectorLayer,
 )
 from qgis.PyQt.QtCore import QCoreApplication
@@ -12,6 +13,7 @@ from .datasets import DATASETS, PREFECTURES
 class MOELoaderAlgorithm(QgsProcessingAlgorithm):
     DATASET = "DATASET"
     PREFECTURE = "PREFECTURE"
+    OUTPUT = "OUTPUT"
 
     def initAlgorithm(self, config=None):
         """
@@ -40,9 +42,18 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
+        # 出力レイヤ
+        self.addParameter(
+            QgsProcessingParameterFeatureSink(
+                self.OUTPUT,
+                self.tr("出力レイヤ"),
+                optional=False,
+            )
+        )
+
     def processAlgorithm(self, parameters, context, feedback):
         """
-        ArcGIS REST FeatureServerからレイヤを追加
+        ArcGIS REST FeatureServerからレイヤをロードしてFeatureSinkに出力
         """
         # 選択されたデータセットを取得
         dataset_idx = self.parameterAsEnum(parameters, self.DATASET, context)
@@ -64,17 +75,18 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
         feedback.pushInfo(f"Loading from: {url}")
 
-        # ArcGIS FeatureServerレイヤを追加
-        result = self._add_arcgis_layer(url, layer_name, feedback)
+        # ArcGIS FeatureServerからレイヤをロードしてsinkに出力
+        result = self._load_and_write_layers(
+            url, layer_name, parameters, context, feedback
+        )
 
         return {"OUTPUT": result}
 
-    def _add_arcgis_layer(self, url, layer_name, feedback):
+    def _load_and_write_layers(self, url, layer_name, parameters, context, feedback):
         """
-        ArcGIS REST FeatureServerレイヤをQGISプロジェクトに追加
+        ArcGIS REST FeatureServerからレイヤをロードし、FeatureSinkに書き込む
         """
         try:
-            # FeatureServerの全レイヤ情報を取得して、各レイヤを追加
             import json
             from urllib.error import URLError
             from urllib.request import urlopen
@@ -87,59 +99,73 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 feedback.reportError(
                     f"Failed to fetch FeatureServer metadata: {str(e)}"
                 )
-                return False
+                return None
 
             # レイヤリストを取得
             layers = data.get("layers", [])
 
             if not layers:
                 feedback.reportError(f"No layers found in FeatureServer: {url}")
-                return False
+                return None
 
-            # 各レイヤを追加
-            added_count = 0
-            for layer_info in layers:
-                layer_id = layer_info.get("id")
-                layer_title = layer_info.get("name", f"Layer {layer_id}")
+            # 最初のレイヤのみを処理（複数レイヤの場合は最初のものを使用）
+            # 複数レイヤ対応は今後の拡張として残す
+            first_layer = layers[0]
+            layer_id = first_layer.get("id")
+            layer_title = first_layer.get("name", f"Layer {layer_id}")
 
-                # レイヤURLを構築（レイヤIDを含む）
-                layer_url = f"{url}/{layer_id}"
+            # レイヤURLを構築（レイヤIDを含む）
+            layer_url = f"{url}/{layer_id}"
 
-                # ArcGIS FeatureServerレイヤを作成
-                # crs=authid形式でURL構築
-                uri = f"crs='EPSG:4612' url='{layer_url}'"
-                full_layer_name = f"{layer_name} - {layer_title}"
+            # ArcGIS FeatureServerレイヤを作成
+            uri = f"crs='EPSG:4612' url='{layer_url}'"
+            full_layer_name = f"{layer_name} - {layer_title}"
 
-                vector_layer = QgsVectorLayer(
-                    uri, full_layer_name, "arcgisfeatureserver"
+            vector_layer = QgsVectorLayer(uri, full_layer_name, "arcgisfeatureserver")
+
+            if not vector_layer.isValid():
+                feedback.reportError(
+                    f"Failed to load layer: {full_layer_name} (ID: {layer_id})"
                 )
+                return None
 
-                if not vector_layer.isValid():
-                    feedback.pushWarning(
-                        f"Failed to load layer: {full_layer_name} (ID: {layer_id})"
-                    )
-                    continue
+            # FeatureSinkを作成
+            (sink, dest_id) = self.parameterAsSink(
+                parameters,
+                self.OUTPUT,
+                context,
+                vector_layer.fields(),
+                vector_layer.wkbType(),
+                vector_layer.crs(),
+            )
 
-                # プロジェクトにレイヤを追加
-                QgsProject.instance().addMapLayer(vector_layer)
-                feedback.pushInfo(
-                    f"Successfully added layer: {full_layer_name} (ID: {layer_id})"
-                )
-                added_count += 1
+            if sink is None:
+                feedback.reportError("Failed to create output sink")
+                return None
 
-            if added_count == 0:
-                feedback.reportError("No layers were successfully added")
-                return False
+            # フィーチャをsinkに書き込む
+            total = vector_layer.featureCount()
+            feedback.pushInfo(f"Writing {total} features to output...")
 
-            feedback.pushInfo(f"Total layers added: {added_count}")
-            return True
+            for current, feature in enumerate(vector_layer.getFeatures()):
+                if feedback.isCanceled():
+                    break
+
+                sink.addFeature(feature, QgsFeatureSink.FastInsert)
+
+                if total > 0:
+                    feedback.setProgress(int((current / total) * 100))
+
+            feedback.pushInfo(f"Successfully wrote layer: {full_layer_name}")
+
+            return dest_id
 
         except Exception as e:
-            feedback.reportError(f"Error adding layer: {str(e)}")
+            feedback.reportError(f"Error loading layers: {str(e)}")
             import traceback
 
             feedback.reportError(traceback.format_exc())
-            return False
+            return None
 
     def name(self):
         """

@@ -130,7 +130,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             layer_id = first_layer.get("id")
 
             # Build layer name from dataset name and prefecture
-            layer_name = dataset["name"]
+            layer_name = dataset["name"].replace("- 都道府県別", "").strip()
             if has_prefecture and pref_idx is not None:
                 prefecture_name = list(PREFECTURES.values())[pref_idx]
                 layer_name = f"{layer_name}_{prefecture_name}"

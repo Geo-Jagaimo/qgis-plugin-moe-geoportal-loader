@@ -1,11 +1,11 @@
 DATASETS = {
     "vg_50000": {
-        "name": "現存植生図（1/50,000）",
+        "name": "現存植生図（1/50,000）- 都道府県別",
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/vg_{pref_code}/FeatureServer",
         "has_prefecture": True,
     },
     "vgsk_50000": {
-        "name": "自然度区分図（1/50,000）",
+        "name": "自然度区分図（1/50,000）- 都道府県別",
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/vgsk_{pref_code}/FeatureServer",
         "has_prefecture": True,
     },

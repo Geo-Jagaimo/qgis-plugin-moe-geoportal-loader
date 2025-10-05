@@ -4,6 +4,8 @@ from qgis.core import (
     QgsProcessingParameterEnum,
     QgsProcessingParameterFeatureSink,
     QgsVectorLayer,
+    QgsFields,
+    QgsField,
 )
 from qgis.PyQt.QtCore import QCoreApplication
 
@@ -155,12 +157,21 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 )
                 return None
 
+            # フィールドのメタデータをクリア（別名とコメントを削除して警告を抑制）
+            cleaned_fields = QgsFields()
+            for field in vector_layer.fields():
+                # 新しいフィールドを作成（別名とコメントなし）
+                new_field = QgsField(field)
+                new_field.setAlias("")  # 別名をクリア
+                new_field.setComment("")  # コメントをクリア
+                cleaned_fields.append(new_field)
+
             # FeatureSinkを作成
             (sink, dest_id) = self.parameterAsSink(
                 parameters,
                 self.OUTPUT,
                 context,
-                vector_layer.fields(),
+                cleaned_fields,
                 vector_layer.wkbType(),
                 vector_layer.crs(),
             )

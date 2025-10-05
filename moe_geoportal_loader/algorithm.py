@@ -1,11 +1,11 @@
 from qgis.core import (
     QgsFeatureSink,
+    QgsField,
+    QgsFields,
     QgsProcessingAlgorithm,
     QgsProcessingParameterEnum,
     QgsProcessingParameterFeatureSink,
     QgsVectorLayer,
-    QgsFields,
-    QgsField,
 )
 from qgis.PyQt.QtCore import QCoreApplication
 
@@ -20,11 +20,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
     OUTPUT = "OUTPUT"
 
     def initAlgorithm(self, config=None):
-        """
-        URL指定のためのパラメータ（データセット/カテゴリ/都道府県）
-        """
-        # 全カテゴリをフラット化してリスト作成（データセット名をプレフィックスとして含む）
-        self._category_mapping = []  # (dataset_key, category_key, display_name, has_prefecture)
+        self._category_mapping = []
         category_options = []
 
         for dataset_key, dataset in DATASETS.items():
@@ -40,7 +36,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 )
                 category_options.append(display_name)
 
-        # カテゴリ選択（すべてのデータセット×カテゴリの組み合わせ）
+        # select dataset
         self.addParameter(
             QgsProcessingParameterEnum(
                 self.CATEGORY,
@@ -50,7 +46,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
-        # 都道府県
+        # select prefecture
         prefecture_names = [name for name in PREFECTURES.values()]
         self.addParameter(
             QgsProcessingParameterEnum(
@@ -61,7 +57,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
-        # 出力レイヤ
+        # output layer
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT,
@@ -71,30 +67,22 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         )
 
     def processAlgorithm(self, parameters, context, feedback):
-        """
-        ArcGIS REST FeatureServerからレイヤをロードしてFeatureSinkに出力
-        """
-        # 選択されたカテゴリインデックスからデータセットとカテゴリ情報を取得
         category_idx = self.parameterAsEnum(parameters, self.CATEGORY, context)
         dataset_key, category_key, display_name, has_prefecture = (
             self._category_mapping[category_idx]
         )
 
-        # データセットとカテゴリを取得
         dataset = DATASETS[dataset_key]
         category = dataset["categories"][category_key]
 
-        # URLを構築
         url = category["url"]
 
-        # レイヤ名を構築（マッピングの表示名を使用）
         layer_name = display_name
 
-        # 都道府県別データの場合、都道府県コードを置換
+        # validation for data that requires prefecture specification
         if has_prefecture:
             pref_idx = self.parameterAsEnum(parameters, self.PREFECTURE, context)
             if pref_idx is None or pref_idx == 0:
-                # pref_idx が 0 は「都道府県を選択してください」が選択されている
                 feedback.reportError("都道府県を選択してください")
                 return {"OUTPUT": None}
 
@@ -104,7 +92,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
         feedback.pushInfo(f"Loading from: {url}")
 
-        # ArcGIS FeatureServerからレイヤをロードしてsinkに出力
         result = self._load_and_write_layers(
             url, layer_name, parameters, context, feedback
         )
@@ -112,15 +99,11 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         return {"OUTPUT": result}
 
     def _load_and_write_layers(self, url, layer_name, parameters, context, feedback):
-        """
-        ArcGIS REST FeatureServerからレイヤをロードし、FeatureSinkに書き込む（最適化版）
-        """
         try:
             import json
             from urllib.error import URLError
             from urllib.request import urlopen
 
-            # FeatureServerのメタデータを取得
             try:
                 with urlopen(f"{url}?f=json") as response:
                     data = json.loads(response.read().decode())
@@ -130,22 +113,18 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 )
                 return None
 
-            # レイヤリストを取得
             layers = data.get("layers", [])
 
             if not layers:
                 feedback.reportError(f"No layers found in FeatureServer: {url}")
                 return None
 
-            # 最初のレイヤのみを処理
             first_layer = layers[0]
             layer_id = first_layer.get("id")
             layer_title = first_layer.get("name", f"Layer {layer_id}")
 
-            # レイヤURLを構築（レイヤIDを含む）
             layer_url = f"{url}/{layer_id}"
 
-            # ArcGIS FeatureServerレイヤを作成
             uri = f"crs='EPSG:4612' url='{layer_url}'"
             full_layer_name = f"{layer_name} - {layer_title}"
 
@@ -157,19 +136,16 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 )
                 return None
 
-            # フィールドのメタデータをクリア（別名とコメントを削除して警告を抑制）
             cleaned_fields = QgsFields()
             for field in vector_layer.fields():
-                # 新しいフィールドを作成（別名とコメントなし）
+                # create new fields
                 new_field = QgsField(field)
-                new_field.setAlias("")  # 別名をクリア
-                new_field.setComment("")  # コメントをクリア
+                new_field.setAlias("")
+                new_field.setComment("")
                 cleaned_fields.append(new_field)
 
-            # FeatureSinkを作成（CRSを確実に設定）
             output_crs = vector_layer.crs()
 
-            # QgsProcessingParameterFeatureSinkを使用してsinkを作成
             (sink, dest_id) = self.parameterAsSink(
                 parameters,
                 self.OUTPUT,
@@ -186,12 +162,11 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
             feedback.pushInfo(f"Output CRS: {output_crs.authid()}")
 
-            # フィーチャをバッチで書き込む（高速化）
             total = vector_layer.featureCount()
             feedback.pushInfo(f"Writing {total} features to output...")
 
-            # バッチサイズを設定（メモリ使用量とパフォーマンスのバランス）
-            BATCH_SIZE = 1000
+            # Batch processing settings
+            BATCH_SIZE = 2000
             features_batch = []
             processed = 0
 
@@ -201,17 +176,14 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
                 features_batch.append(feature)
 
-                # バッチサイズに達したら一括書き込み
                 if len(features_batch) >= BATCH_SIZE:
                     sink.addFeatures(features_batch, QgsFeatureSink.FastInsert)
                     processed += len(features_batch)
                     features_batch = []
 
-                    # 進捗更新
                     if total > 0:
                         feedback.setProgress(int((processed / total) * 100))
 
-            # 残りのフィーチャを書き込む
             if features_batch:
                 sink.addFeatures(features_batch, QgsFeatureSink.FastInsert)
                 processed += len(features_batch)

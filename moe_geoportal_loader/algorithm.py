@@ -61,7 +61,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         dataset = DATASETS[dataset_key]
 
         # URLを構築
-        url = dataset["url_template"]
+        url = dataset["url"]
 
         # 都道府県別データの場合、都道府県コードを置換
         if dataset["has_prefecture"]:

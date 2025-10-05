@@ -1,12 +1,17 @@
 DATASETS = {
     "vegetation_map_25000": {
         "name": "植生図（1/25,000）",
-        "url_template": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/vgsk_{pref_code}/FeatureServer",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/vgsk_{pref_code}/FeatureServer",
         "has_prefecture": True,
     },
-    "vegetation_map_50000": {
-        "name": "植生図（1/50,000）",
-        "url_template": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/vg_{pref_code}/FeatureServer",
+    "current_vegetation_map_50000": {
+        "name": "現存植生図（1/50,000）",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/vg_{pref_code}/FeatureServer",
+        "has_prefecture": True,
+    },
+    "naturalness_classification_map_50000": {
+        "name": "自然度区分図(1/50,000)",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/vgsk_{pref_code}/FeatureServer",
         "has_prefecture": True,
     },
 }

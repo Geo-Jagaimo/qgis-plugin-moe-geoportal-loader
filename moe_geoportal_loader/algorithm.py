@@ -166,19 +166,25 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 new_field.setComment("")  # コメントをクリア
                 cleaned_fields.append(new_field)
 
-            # FeatureSinkを作成
+            # FeatureSinkを作成（CRSを確実に設定）
+            output_crs = vector_layer.crs()
+
+            # QgsProcessingParameterFeatureSinkを使用してsinkを作成
             (sink, dest_id) = self.parameterAsSink(
                 parameters,
                 self.OUTPUT,
                 context,
                 cleaned_fields,
                 vector_layer.wkbType(),
-                vector_layer.crs(),
+                output_crs,
+                QgsFeatureSink.SinkFlags(),
             )
 
             if sink is None:
                 feedback.reportError("Failed to create output sink")
                 return None
+
+            feedback.pushInfo(f"Output CRS: {output_crs.authid()}")
 
             # フィーチャをバッチで書き込む（高速化）
             total = vector_layer.featureCount()

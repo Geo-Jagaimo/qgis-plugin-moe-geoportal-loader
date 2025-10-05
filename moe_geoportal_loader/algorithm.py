@@ -25,7 +25,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
         for dataset_key, dataset in DATASETS.items():
             for category_key, category in dataset["categories"].items():
-                display_name = f"{dataset['name']} - {category['name']}"
+                display_name = f"{dataset['name']}（{category['name']}）"
                 self._category_mapping.append(
                     (
                         dataset_key,

@@ -5,6 +5,7 @@ from qgis.core import (
     QgsProcessingAlgorithm,
     QgsProcessingParameterEnum,
     QgsProcessingParameterFeatureSink,
+    QgsProject,
     QgsVectorLayer,
 )
 from qgis.PyQt.QtCore import QCoreApplication
@@ -17,6 +18,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
     DATASET = "DATASET"
     CATEGORY = "CATEGORY"
     PREFECTURE = "PREFECTURE"
+    OUTPUT_MODE = "OUTPUT_MODE"
     OUTPUT = "OUTPUT"
 
     def initAlgorithm(self, config=None):
@@ -53,13 +55,26 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
-        # output layer
+        # select output mode
+        self.addParameter(
+            QgsProcessingParameterEnum(
+                self.OUTPUT_MODE,
+                self.tr("出力方法"),
+                options=[
+                    self.tr("スタイル付きマップ（ArcGISレイヤー）"),
+                    self.tr("ファイルに保存"),
+                ],
+                defaultValue=0,
+            )
+        )
+
+        # output layer (only for file save mode)
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT,
                 self.tr("出力レイヤ"),
-                optional=False,
-                defaultValue="TEMPORARY_OUTPUT",
+                optional=True,
+                defaultValue=None,
             )
         )
 
@@ -87,9 +102,79 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
         feedback.pushInfo(f"Loading from: {url}")
 
-        result = self._load_and_write_layers(url, parameters, context, feedback)
+        output_mode = self.parameterAsEnum(parameters, self.OUTPUT_MODE, context)
+
+        if output_mode == 0:  # ArcGIS layer with styling
+            result = self._load_as_arcgis_layer(
+                url,
+                dataset,
+                has_prefecture,
+                pref_idx if has_prefecture else None,
+                parameters,
+                context,
+                feedback,
+            )
+        else:  # Save to file
+            result = self._load_and_write_layers(url, parameters, context, feedback)
 
         return {"OUTPUT": result}
+
+    def _load_as_arcgis_layer(
+        self, url, dataset, has_prefecture, pref_idx, parameters, context, feedback
+    ):
+        """Load layer directly as ArcGIS Feature Server layer with styling"""
+        try:
+            import json
+            from urllib.error import URLError
+            from urllib.request import urlopen
+
+            try:
+                with urlopen(f"{url}?f=json") as response:
+                    data = json.loads(response.read().decode())
+            except URLError as e:
+                feedback.reportError(
+                    f"Failed to fetch FeatureServer metadata: {str(e)}"
+                )
+                return None
+
+            layers = data.get("layers", [])
+
+            if not layers:
+                feedback.reportError(f"No layers found in FeatureServer: {url}")
+                return None
+
+            first_layer = layers[0]
+            layer_id = first_layer.get("id")
+
+            # Build layer name from dataset name and prefecture
+            layer_name = dataset["name"]
+            if has_prefecture and pref_idx is not None:
+                prefecture_name = list(PREFECTURES.values())[pref_idx]
+                layer_name = f"{layer_name}_{prefecture_name}"
+
+            layer_url = f"{url}/{layer_id}"
+            uri = f"url='{layer_url}'"
+
+            vector_layer = QgsVectorLayer(uri, layer_name, "arcgisfeatureserver")
+
+            if not vector_layer.isValid():
+                feedback.reportError(f"Failed to load layer (ID: {layer_id})")
+                return None
+
+            # Add layer to project with styling preserved
+            QgsProject.instance().addMapLayer(vector_layer)
+
+            feedback.pushInfo(f"Successfully loaded layer: {layer_name}")
+            feedback.pushInfo(f"CRS: {vector_layer.crs().authid()}")
+
+            return vector_layer.id()
+
+        except Exception as e:
+            feedback.reportError(f"Error loading layer: {str(e)}")
+            import traceback
+
+            feedback.reportError(traceback.format_exc())
+            return None
 
     def _load_and_write_layers(self, url, parameters, context, feedback):
         try:

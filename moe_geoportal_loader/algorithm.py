@@ -207,7 +207,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return "MOEGeoportalLoader"
+        return "環境ジオポータルのデータを読み込む"
 
     def displayName(self):
         """

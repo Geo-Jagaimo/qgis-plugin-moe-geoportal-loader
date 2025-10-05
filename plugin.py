@@ -1,20 +1,50 @@
+import contextlib
+
 from qgis.core import QgsApplication
 from qgis.gui import QgisInterface
+from qgis.PyQt.QtWidgets import QAction, QToolButton
 
 from .moe_geoportal_loader.provider import MOELoaderProvider
+
+with contextlib.suppress(ImportError):
+    from processing import execAlgorithmDialog
 
 
 class MOEGeoportalLoader:
     def __init__(self, iface: QgisInterface):
-        self.provider = None
         self.iface = iface
 
-    def initProcessing(self):
+    def initGui(self):
         self.provider = MOELoaderProvider()
         QgsApplication.processingRegistry().addProvider(self.provider)
 
-    def initGui(self):
-        self.initProcessing()
+        if self.iface:
+            self.setup_algorithm_tool_button()
 
     def unload(self):
+        self.teardown_algorithm_tool_button()
         QgsApplication.processingRegistry().removeProvider(self.provider)
+
+    def setup_algorithm_tool_button(self):
+        if hasattr(self, "toolButtonAction") and self.toolButtonAction:
+            return
+
+        tool_button = QToolButton()
+        icon = self.provider.icon()
+        default_action = QAction(
+            icon, self.tr("環境ジオポータルのデータを読み込む"), self.iface.mainWindow()
+        )
+        default_action.triggered.connect(
+            lambda: execAlgorithmDialog("moe:環境ジオポータルのデータを読み込む", {})
+        )
+        tool_button.setDefaultAction(default_action)
+
+        self.toolButtonAction = self.iface.addToolBarWidget(tool_button)
+
+    def teardown_algorithm_tool_button(self):
+        if hasattr(self, "toolButtonAction"):
+            self.iface.removeToolBarIcon(self.toolButtonAction)
+            del self.toolButtonAction
+
+    def tr(self, string):
+        return QgsApplication.translate("MOEGeoportalLoader", string)

@@ -14,6 +14,11 @@ DATASETS = {
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/vgsk_{pref_code}/FeatureServer",
         "has_prefecture": True,
     },
+    "henka_union_tokunoshima_5th": {
+        "name": "変化_union_徳之島_第5回andR01Coralmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_union_tokunoshima_5thandR01Coralmap/FeatureServer",
+        "has_prefecture": True,
+    },
 }
 
 PREFECTURES = {

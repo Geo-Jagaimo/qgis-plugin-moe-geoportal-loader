@@ -7,25 +7,38 @@ from qgis.core import (
 )
 from qgis.PyQt.QtCore import QCoreApplication
 
-from .datasets import DATASETS, PREFECTURES
+from .datasets import DATASETS
+from .prefecture import PREFECTURES
 
 
 class MOELoaderAlgorithm(QgsProcessingAlgorithm):
     DATASET = "DATASET"
+    CATEGORY = "CATEGORY"
     PREFECTURE = "PREFECTURE"
     OUTPUT = "OUTPUT"
 
     def initAlgorithm(self, config=None):
         """
-        URL指定のためのパラメータ（データセット/都道府県）
+        URL指定のためのパラメータ（データセット/カテゴリ/都道府県）
         """
-        # dataset
-        dataset_names = [ds["name"] for ds in DATASETS.values()]
+        # 全カテゴリをフラット化してリスト作成（データセット名をプレフィックスとして含む）
+        self._category_mapping = []  # (dataset_key, category_key, display_name, has_prefecture)
+        category_options = []
+
+        for dataset_key, dataset in DATASETS.items():
+            for category_key, category in dataset["categories"].items():
+                display_name = f"{dataset['name']} - {category['name']}"
+                self._category_mapping.append(
+                    (dataset_key, category_key, display_name, category["has_prefecture"])
+                )
+                category_options.append(display_name)
+
+        # カテゴリ選択（すべてのデータセット×カテゴリの組み合わせ）
         self.addParameter(
             QgsProcessingParameterEnum(
-                self.DATASET,
-                self.tr("データセット"),
-                options=dataset_names,
+                self.CATEGORY,
+                self.tr("データセット - カテゴリ"),
+                options=category_options,
                 defaultValue=0,
             )
         )
@@ -55,23 +68,32 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         """
         ArcGIS REST FeatureServerからレイヤをロードしてFeatureSinkに出力
         """
-        # 選択されたデータセットを取得
-        dataset_idx = self.parameterAsEnum(parameters, self.DATASET, context)
-        dataset_key = list(DATASETS.keys())[dataset_idx]
+        # 選択されたカテゴリインデックスからデータセットとカテゴリ情報を取得
+        category_idx = self.parameterAsEnum(parameters, self.CATEGORY, context)
+        dataset_key, category_key, display_name, has_prefecture = self._category_mapping[
+            category_idx
+        ]
+
+        # データセットとカテゴリを取得
         dataset = DATASETS[dataset_key]
+        category = dataset["categories"][category_key]
 
         # URLを構築
-        url = dataset["url"]
+        url = category["url"]
+
+        # レイヤ名を構築（マッピングの表示名を使用）
+        layer_name = display_name
 
         # 都道府県別データの場合、都道府県コードを置換
-        if dataset["has_prefecture"]:
+        if has_prefecture:
             pref_idx = self.parameterAsEnum(parameters, self.PREFECTURE, context)
-            pref_code = list(PREFECTURES.keys())[pref_idx]
-            url = url.format(pref_code=pref_code)
-            layer_name = f"{dataset['name']} ({PREFECTURES[pref_code]})"
-        else:
-            url = url.format(pref_code="")
-            layer_name = dataset["name"]
+            if pref_idx is not None:
+                pref_code = list(PREFECTURES.keys())[pref_idx]
+                url = url.format(pref_code=pref_code)
+                layer_name = f"{layer_name} ({PREFECTURES[pref_code]})"
+            else:
+                feedback.reportError("都道府県の選択が必要です")
+                return {"OUTPUT": None}
 
         feedback.pushInfo(f"Loading from: {url}")
 

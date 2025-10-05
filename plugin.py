@@ -1,11 +1,13 @@
 from qgis.core import QgsApplication
+from qgis.gui import QgisInterface
 
 from .moe_geoportal_loader_provider import MOELoaderProvider
 
 
-class MOEGeoportalLoader(object):
-    def __init__(self):
+class MOEGeoportalLoader:
+    def __init__(self, iface: QgisInterface):
         self.provider = None
+        self.iface = iface
 
     def initProcessing(self):
         self.provider = MOELoaderProvider()

@@ -22,9 +22,9 @@
  This script initializes the plugin, making it known to QGIS.
 """
 
-__author__ = 'Keita Uemori'
-__date__ = '2025-10-01'
-__copyright__ = '(C) 2025 by Keita Uemori'
+__author__ = "Keita Uemori"
+__date__ = "2025-10-01"
+__copyright__ = "(C) 2025 by Keita Uemori"
 
 
 # noinspection PyPep8Naming
@@ -35,5 +35,6 @@ def classFactory(iface):  # pylint: disable=invalid-name
     :type iface: QgsInterface
     """
     #
-    from .moe_geoportal_loader import MOEGeoportalLoader
+    from .moe_geoportal_loader_plugin import MOEGeoportalLoader
+
     return MOEGeoportalLoader()

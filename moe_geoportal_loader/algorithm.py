@@ -15,9 +15,9 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
     def initAlgorithm(self, config=None):
         """
-        アルゴリズムの入力パラメータを定義
+        URL指定のためのパラメータ（データセット/都道府県）
         """
-        # データセット選択パラメータ
+        # dataset
         dataset_names = [ds["name"] for ds in DATASETS.values()]
         self.addParameter(
             QgsProcessingParameterEnum(
@@ -28,7 +28,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
-        # 都道府県選択パラメータ
+        # 都道府県
         prefecture_names = [f"{code}: {name}" for code, name in PREFECTURES.items()]
         self.addParameter(
             QgsProcessingParameterEnum(
@@ -59,7 +59,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             url = url.format(pref_code=pref_code)
             layer_name = f"{dataset['name']} ({PREFECTURES[pref_code]})"
         else:
-            url = url.format(pref_code="")  # プレースホルダーがあれば削除
+            url = url.format(pref_code="")
             layer_name = dataset["name"]
 
         feedback.pushInfo(f"Loading from: {url}")

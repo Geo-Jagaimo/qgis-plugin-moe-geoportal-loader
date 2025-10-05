@@ -24,15 +24,13 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         dataset_options = []
 
         for dataset_key, dataset in DATASETS.items():
-            display_name = dataset["name"]
             self._dataset_mapping.append(
                 (
                     dataset_key,
-                    display_name,
                     dataset["has_prefecture"],
                 )
             )
-            dataset_options.append(display_name)
+            dataset_options.append(dataset["name"])
 
         # select dataset
         self.addParameter(
@@ -61,16 +59,16 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 self.OUTPUT,
                 self.tr("出力レイヤ"),
                 optional=False,
+                defaultValue="TEMPORARY_OUTPUT",
             )
         )
 
     def processAlgorithm(self, parameters, context, feedback):
         dataset_idx = self.parameterAsEnum(parameters, self.CATEGORY, context)
-        dataset_key, display_name, has_prefecture = self._dataset_mapping[dataset_idx]
+        dataset_key, has_prefecture = self._dataset_mapping[dataset_idx]
 
         dataset = DATASETS[dataset_key]
         url = dataset["url"]
-        layer_name = display_name
 
         # validation for data that requires prefecture specification
         if has_prefecture:
@@ -81,17 +79,16 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
             pref_code = list(PREFECTURES.keys())[pref_idx]
             url = url.format(pref_code=pref_code)
-            layer_name = f"{layer_name} ({PREFECTURES[pref_code]})"
 
         feedback.pushInfo(f"Loading from: {url}")
 
         result = self._load_and_write_layers(
-            url, layer_name, parameters, context, feedback
+            url, parameters, context, feedback
         )
 
         return {"OUTPUT": result}
 
-    def _load_and_write_layers(self, url, layer_name, parameters, context, feedback):
+    def _load_and_write_layers(self, url, parameters, context, feedback):
         try:
             import json
             from urllib.error import URLError
@@ -114,19 +111,15 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
             first_layer = layers[0]
             layer_id = first_layer.get("id")
-            layer_title = first_layer.get("name", f"Layer {layer_id}")
 
             layer_url = f"{url}/{layer_id}"
 
             uri = f"crs='EPSG:4612' url='{layer_url}'"
-            full_layer_name = f"{layer_name} - {layer_title}"
 
-            vector_layer = QgsVectorLayer(uri, full_layer_name, "arcgisfeatureserver")
+            vector_layer = QgsVectorLayer(uri, "temp", "arcgisfeatureserver")
 
             if not vector_layer.isValid():
-                feedback.reportError(
-                    f"Failed to load layer: {full_layer_name} (ID: {layer_id})"
-                )
+                feedback.reportError(f"Failed to load layer (ID: {layer_id})")
                 return None
 
             cleaned_fields = QgsFields()

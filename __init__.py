@@ -35,5 +35,5 @@ def classFactory(iface):  # pylint: disable=invalid-name
     :type iface: QgsInterface
     """
     #
-    from .moe_geoportal_loader import MOELoaderPlugin
-    return MOELoaderPlugin()
+    from .moe_geoportal_loader import MOEGeoportalLoader
+    return MOEGeoportalLoader()

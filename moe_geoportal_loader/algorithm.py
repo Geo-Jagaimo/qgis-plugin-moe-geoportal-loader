@@ -18,7 +18,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
     DATASET = "DATASET"
     CATEGORY = "CATEGORY"
     PREFECTURE = "PREFECTURE"
-    OUTPUT_MODE = "OUTPUT_MODE"
     OUTPUT = "OUTPUT"
 
     def initAlgorithm(self, config=None):
@@ -55,26 +54,13 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
-        # select output mode
-        self.addParameter(
-            QgsProcessingParameterEnum(
-                self.OUTPUT_MODE,
-                self.tr("出力方法"),
-                options=[
-                    self.tr("スタイル付きマップ（ArcGISレイヤー）"),
-                    self.tr("ファイルに保存"),
-                ],
-                defaultValue=0,
-            )
-        )
-
-        # output layer (only for file save mode)
+        # optional file output (skip by default)
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT,
-                self.tr("出力レイヤ"),
+                self.tr("ファイルに保存"),
                 optional=True,
-                defaultValue=None,
+                createByDefault=False,
             )
         )
 
@@ -102,26 +88,23 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
         feedback.pushInfo(f"Loading from: {url}")
 
-        output_mode = self.parameterAsEnum(parameters, self.OUTPUT_MODE, context)
+        # Always load as ArcGIS layer with styling
+        layer_id = self._load_as_arcgis_layer(
+            url,
+            dataset,
+            has_prefecture,
+            pref_idx if has_prefecture else None,
+            feedback,
+        )
 
-        if output_mode == 0:  # ArcGIS layer with styling
-            result = self._load_as_arcgis_layer(
-                url,
-                dataset,
-                has_prefecture,
-                pref_idx if has_prefecture else None,
-                parameters,
-                context,
-                feedback,
-            )
-        else:  # Save to file
-            result = self._load_and_write_layers(url, parameters, context, feedback)
+        # Optionally save to file if output is specified
+        file_output = None
+        if parameters.get(self.OUTPUT):
+            file_output = self._save_to_file(url, parameters, context, feedback)
 
-        return {"OUTPUT": result}
+        return {"OUTPUT": file_output if file_output else layer_id}
 
-    def _load_as_arcgis_layer(
-        self, url, dataset, has_prefecture, pref_idx, parameters, context, feedback
-    ):
+    def _load_as_arcgis_layer(self, url, dataset, has_prefecture, pref_idx, feedback):
         """Load layer directly as ArcGIS Feature Server layer with styling"""
         try:
             import json
@@ -176,7 +159,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             feedback.reportError(traceback.format_exc())
             return None
 
-    def _load_and_write_layers(self, url, parameters, context, feedback):
+    def _save_to_file(self, url, parameters, context, feedback):
         try:
             import json
             from urllib.error import URLError

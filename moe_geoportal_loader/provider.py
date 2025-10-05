@@ -1,6 +1,6 @@
 from qgis.core import QgsProcessingProvider
 
-from .moe_geoportal_loader_algorithm import MOELoaderAlgorithm
+from .algorithm import MOELoaderAlgorithm
 
 
 class MOELoaderProvider(QgsProcessingProvider):

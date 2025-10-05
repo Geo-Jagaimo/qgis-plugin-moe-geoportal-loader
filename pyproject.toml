@@ -1,7 +1,10 @@
 [project]
 name = "moe-geoportal-loader"
 version = "1.0.0"
-description = "A QGIS plugin for adding data from the moe-geoportal."
+description = ""
+authors = [
+    {name = "Keita Uemori", email = "geo.jagaimo@gmail.com"},
+]
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = []
@@ -9,5 +12,6 @@ dependencies = []
 [dependency-groups]
 dev = [
     "pyqt5-stubs>=5.15.6.0",
+    "pyqt6-stubs>=6.7.0.0",
     "ruff>=0.8.2",
 ]

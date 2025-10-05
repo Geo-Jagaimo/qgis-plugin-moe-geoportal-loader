@@ -1,25 +1,20 @@
 DATASETS = {
-    "vegetation_map_25000": {
-        "name": "植生図（1/25,000）",
-        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/vgsk_{pref_code}/FeatureServer",
-        "has_prefecture": True,
-    },
-    "current_vegetation_map_50000": {
+    "vg_50000": {
         "name": "現存植生図（1/50,000）",
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/vg_{pref_code}/FeatureServer",
         "has_prefecture": True,
     },
-    "naturalness_classification_map_50000": {
+    "vgsk_50000": {
         "name": "自然度区分図(1/50,000)",
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/vgsk_{pref_code}/FeatureServer",
         "has_prefecture": True,
     },
-    "henka_union_tokunoshima_5th": {
+    "change_union_tokunoshima_5th": {
         "name": "変化_union_徳之島_第5回andR01Coralmap",
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_union_tokunoshima_5thandR01Coralmap/FeatureServer",
         "has_prefecture": True,
     },
-    "henka_union_amami_4th": {
+    "change_union_amami_4th": {
         "name": "変化_union_奄美大島_第4回andR01Coralmap",
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_union_amamiooshima_4thandR01Coralmap/FeatureServer",
         "has_prefecture": True,

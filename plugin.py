@@ -32,7 +32,7 @@ class MOEGeoportalLoader:
         tool_button = QToolButton()
         icon = self.provider.icon()
         default_action = QAction(
-            icon, self.tr("環境ジオポータルのデータを読み込む"), self.iface.mainWindow()
+            icon, "環境ジオポータルのデータを読み込む", self.iface.mainWindow()
         )
         default_action.triggered.connect(
             lambda: execAlgorithmDialog("moe:環境ジオポータルのデータを読み込む", {})
@@ -45,6 +45,3 @@ class MOEGeoportalLoader:
         if hasattr(self, "toolButtonAction"):
             self.iface.removeToolBarIcon(self.toolButtonAction)
             del self.toolButtonAction
-
-    def tr(self, string):
-        return QgsApplication.translate("MOEGeoportalLoader", string)

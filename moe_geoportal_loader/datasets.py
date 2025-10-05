@@ -19,6 +19,11 @@ DATASETS = {
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_union_tokunoshima_5thandR01Coralmap/FeatureServer",
         "has_prefecture": True,
     },
+    "henka_union_amami_4th": {
+        "name": "変化_union_奄美大島_第4回andR01Coralmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_union_amamiooshima_4thandR01Coralmap/FeatureServer",
+        "has_prefecture": True,
+    },
 }
 
 PREFECTURES = {

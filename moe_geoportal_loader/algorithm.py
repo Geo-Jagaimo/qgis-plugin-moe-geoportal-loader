@@ -149,28 +149,16 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             total = vector_layer.featureCount()
             feedback.pushInfo(f"Writing {total} features to output...")
 
-            # Batch processing settings
-            BATCH_SIZE = 2000
-            features_batch = []
             processed = 0
-
             for feature in vector_layer.getFeatures():
                 if feedback.isCanceled():
                     break
 
-                features_batch.append(feature)
+                sink.addFeature(feature, QgsFeatureSink.FastInsert)
+                processed += 1
 
-                if len(features_batch) >= BATCH_SIZE:
-                    sink.addFeatures(features_batch, QgsFeatureSink.FastInsert)
-                    processed += len(features_batch)
-                    features_batch = []
-
-                    if total > 0:
-                        feedback.setProgress(int((processed / total) * 100))
-
-            if features_batch:
-                sink.addFeatures(features_batch, QgsFeatureSink.FastInsert)
-                processed += len(features_batch)
+                if total > 0:
+                    feedback.setProgress(int((processed / total) * 100))
 
             feedback.pushInfo(f"Successfully wrote {processed} features")
 

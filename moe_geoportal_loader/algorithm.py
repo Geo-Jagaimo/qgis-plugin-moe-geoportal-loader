@@ -111,7 +111,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
     def _load_and_write_layers(self, url, layer_name, parameters, context, feedback):
         """
-        ArcGIS REST FeatureServerからレイヤをロードし、FeatureSinkに書き込む
+        ArcGIS REST FeatureServerからレイヤをロードし、FeatureSinkに書き込む（最適化版）
         """
         try:
             import json
@@ -135,8 +135,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 feedback.reportError(f"No layers found in FeatureServer: {url}")
                 return None
 
-            # 最初のレイヤのみを処理（複数レイヤの場合は最初のものを使用）
-            # 複数レイヤ対応は今後の拡張として残す
+            # 最初のレイヤのみを処理
             first_layer = layers[0]
             layer_id = first_layer.get("id")
             layer_title = first_layer.get("name", f"Layer {layer_id}")
@@ -170,20 +169,37 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 feedback.reportError("Failed to create output sink")
                 return None
 
-            # フィーチャをsinkに書き込む
+            # フィーチャをバッチで書き込む（高速化）
             total = vector_layer.featureCount()
             feedback.pushInfo(f"Writing {total} features to output...")
 
-            for current, feature in enumerate(vector_layer.getFeatures()):
+            # バッチサイズを設定（メモリ使用量とパフォーマンスのバランス）
+            BATCH_SIZE = 1000
+            features_batch = []
+            processed = 0
+
+            for feature in vector_layer.getFeatures():
                 if feedback.isCanceled():
                     break
 
-                sink.addFeature(feature, QgsFeatureSink.FastInsert)
+                features_batch.append(feature)
 
-                if total > 0:
-                    feedback.setProgress(int((current / total) * 100))
+                # バッチサイズに達したら一括書き込み
+                if len(features_batch) >= BATCH_SIZE:
+                    sink.addFeatures(features_batch, QgsFeatureSink.FastInsert)
+                    processed += len(features_batch)
+                    features_batch = []
 
-            feedback.pushInfo(f"Successfully wrote layer: {full_layer_name}")
+                    # 進捗更新
+                    if total > 0:
+                        feedback.setProgress(int((processed / total) * 100))
+
+            # 残りのフィーチャを書き込む
+            if features_batch:
+                sink.addFeatures(features_batch, QgsFeatureSink.FastInsert)
+                processed += len(features_batch)
+
+            feedback.pushInfo(f"Successfully wrote {processed} features")
 
             return dest_id
 

@@ -12,8 +12,8 @@ icon=imgs/icon.png
 
 author=Keita Uemori
 email=geo.jagaimo@gmail.com
-homepage=
-tracker=
-repository=
+homepage=https://github.com/Geo-Jagaimo/qgis-plugin-moe-geoportal-loader
+tracker=https://github.com/Geo-Jagaimo/qgis-plugin-moe-geoportal-loader/issues
+repository=https://github.com/Geo-Jagaimo/qgis-plugin-moe-geoportal-loader
 tags=
 category=

@@ -78,6 +78,11 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 return {"OUTPUT": None}
 
             pref_code = list(PREFECTURES.keys())[pref_idx]
+
+            # Handle specific URL for Hokkaido
+            if dataset_key == "vg_50000" and pref_code == "01":
+                pref_code = f"{pref_code}_0420"
+
             url = url.format(pref_code=pref_code)
 
         feedback.pushInfo(f"Loading from: {url}")

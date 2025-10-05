@@ -20,28 +20,26 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
     OUTPUT = "OUTPUT"
 
     def initAlgorithm(self, config=None):
-        self._category_mapping = []
-        category_options = []
+        self._dataset_mapping = []
+        dataset_options = []
 
         for dataset_key, dataset in DATASETS.items():
-            for category_key, category in dataset["categories"].items():
-                display_name = f"{dataset['name']}（{category['name']}）"
-                self._category_mapping.append(
-                    (
-                        dataset_key,
-                        category_key,
-                        display_name,
-                        category["has_prefecture"],
-                    )
+            display_name = dataset["name"]
+            self._dataset_mapping.append(
+                (
+                    dataset_key,
+                    display_name,
+                    dataset["has_prefecture"],
                 )
-                category_options.append(display_name)
+            )
+            dataset_options.append(display_name)
 
         # select dataset
         self.addParameter(
             QgsProcessingParameterEnum(
                 self.CATEGORY,
                 self.tr("データセット"),
-                options=category_options,
+                options=dataset_options,
                 defaultValue=0,
             )
         )
@@ -67,16 +65,11 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         )
 
     def processAlgorithm(self, parameters, context, feedback):
-        category_idx = self.parameterAsEnum(parameters, self.CATEGORY, context)
-        dataset_key, category_key, display_name, has_prefecture = (
-            self._category_mapping[category_idx]
-        )
+        dataset_idx = self.parameterAsEnum(parameters, self.CATEGORY, context)
+        dataset_key, display_name, has_prefecture = self._dataset_mapping[dataset_idx]
 
         dataset = DATASETS[dataset_key]
-        category = dataset["categories"][category_key]
-
-        url = category["url"]
-
+        url = dataset["url"]
         layer_name = display_name
 
         # validation for data that requires prefecture specification

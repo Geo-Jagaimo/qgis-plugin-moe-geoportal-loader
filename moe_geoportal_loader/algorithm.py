@@ -1,81 +1,145 @@
 from qgis.core import (
-    QgsFeatureSink,
-    QgsProcessing,
     QgsProcessingAlgorithm,
-    QgsProcessingParameterFeatureSink,
-    QgsProcessingParameterFeatureSource,
+    QgsProcessingParameterEnum,
+    QgsProject,
+    QgsVectorLayer,
 )
 from qgis.PyQt.QtCore import QCoreApplication
 
+from .datasets import DATASETS, PREFECTURES
+
 
 class MOELoaderAlgorithm(QgsProcessingAlgorithm):
-    OUTPUT = "OUTPUT"
-    INPUT = "INPUT"
+    DATASET = "DATASET"
+    PREFECTURE = "PREFECTURE"
 
-    def initAlgorithm(self, config):
+    def initAlgorithm(self, config=None):
         """
-        Here we define the inputs and output of the algorithm, along
-        with some other properties.
+        アルゴリズムの入力パラメータを定義
         """
-
-        # We add the input vector features source. It can have any kind of
-        # geometry.
+        # データセット選択パラメータ
+        dataset_names = [ds["name"] for ds in DATASETS.values()]
         self.addParameter(
-            QgsProcessingParameterFeatureSource(
-                self.INPUT,
-                self.tr("Input layer"),
-                [QgsProcessing.TypeVectorAnyGeometry],
+            QgsProcessingParameterEnum(
+                self.DATASET,
+                self.tr("データセット"),
+                options=dataset_names,
+                defaultValue=0,
             )
         )
 
-        # We add a feature sink in which to store our processed features (this
-        # usually takes the form of a newly created vector layer when the
-        # algorithm is run in QGIS).
+        # 都道府県選択パラメータ
+        prefecture_names = [f"{code}: {name}" for code, name in PREFECTURES.items()]
         self.addParameter(
-            QgsProcessingParameterFeatureSink(self.OUTPUT, self.tr("Output layer"))
+            QgsProcessingParameterEnum(
+                self.PREFECTURE,
+                self.tr("都道府県"),
+                options=prefecture_names,
+                defaultValue=0,
+                optional=True,
+            )
         )
 
     def processAlgorithm(self, parameters, context, feedback):
         """
-        Here is where the processing itself takes place.
+        ArcGIS REST FeatureServerからレイヤを追加
         """
+        # 選択されたデータセットを取得
+        dataset_idx = self.parameterAsEnum(parameters, self.DATASET, context)
+        dataset_key = list(DATASETS.keys())[dataset_idx]
+        dataset = DATASETS[dataset_key]
 
-        # Retrieve the feature source and sink. The 'dest_id' variable is used
-        # to uniquely identify the feature sink, and must be included in the
-        # dictionary returned by the processAlgorithm function.
-        source = self.parameterAsSource(parameters, self.INPUT, context)
-        (sink, dest_id) = self.parameterAsSink(
-            parameters,
-            self.OUTPUT,
-            context,
-            source.fields(),
-            source.wkbType(),
-            source.sourceCrs(),
-        )
+        # URLを構築
+        url = dataset["url_template"]
 
-        # Compute the number of steps to display within the progress bar and
-        # get features from source
-        total = 100.0 / source.featureCount() if source.featureCount() else 0
-        features = source.getFeatures()
+        # 都道府県別データの場合、都道府県コードを置換
+        if dataset["has_prefecture"]:
+            pref_idx = self.parameterAsEnum(parameters, self.PREFECTURE, context)
+            pref_code = list(PREFECTURES.keys())[pref_idx]
+            url = url.format(pref_code=pref_code)
+            layer_name = f"{dataset['name']} ({PREFECTURES[pref_code]})"
+        else:
+            url = url.format(pref_code="")  # プレースホルダーがあれば削除
+            layer_name = dataset["name"]
 
-        for current, feature in enumerate(features):
-            # Stop the algorithm if cancel button has been clicked
-            if feedback.isCanceled():
-                break
+        feedback.pushInfo(f"Loading from: {url}")
 
-            # Add a feature in the sink
-            sink.addFeature(feature, QgsFeatureSink.FastInsert)
+        # ArcGIS FeatureServerレイヤを追加
+        result = self._add_arcgis_layer(url, layer_name, feedback)
 
-            # Update the progress bar
-            feedback.setProgress(int(current * total))
+        return {"OUTPUT": result}
 
-        # Return the results of the algorithm. In this case our only result is
-        # the feature sink which contains the processed features, but some
-        # algorithms may return multiple feature sinks, calculated numeric
-        # statistics, etc. These should all be included in the returned
-        # dictionary, with keys matching the feature corresponding parameter
-        # or output names.
-        return {self.OUTPUT: dest_id}
+    def _add_arcgis_layer(self, url, layer_name, feedback):
+        """
+        ArcGIS REST FeatureServerレイヤをQGISプロジェクトに追加
+        """
+        try:
+            # FeatureServerの全レイヤ情報を取得して、各レイヤを追加
+            import json
+            from urllib.error import URLError
+            from urllib.request import urlopen
+
+            # FeatureServerのメタデータを取得
+            try:
+                with urlopen(f"{url}?f=json") as response:
+                    data = json.loads(response.read().decode())
+            except URLError as e:
+                feedback.reportError(
+                    f"Failed to fetch FeatureServer metadata: {str(e)}"
+                )
+                return False
+
+            # レイヤリストを取得
+            layers = data.get("layers", [])
+
+            if not layers:
+                feedback.reportError(f"No layers found in FeatureServer: {url}")
+                return False
+
+            # 各レイヤを追加
+            added_count = 0
+            for layer_info in layers:
+                layer_id = layer_info.get("id")
+                layer_title = layer_info.get("name", f"Layer {layer_id}")
+
+                # レイヤURLを構築（レイヤIDを含む）
+                layer_url = f"{url}/{layer_id}"
+
+                # ArcGIS FeatureServerレイヤを作成
+                # crs=authid形式でURL構築
+                uri = f"crs='EPSG:4612' url='{layer_url}'"
+                full_layer_name = f"{layer_name} - {layer_title}"
+
+                vector_layer = QgsVectorLayer(
+                    uri, full_layer_name, "arcgisfeatureserver"
+                )
+
+                if not vector_layer.isValid():
+                    feedback.pushWarning(
+                        f"Failed to load layer: {full_layer_name} (ID: {layer_id})"
+                    )
+                    continue
+
+                # プロジェクトにレイヤを追加
+                QgsProject.instance().addMapLayer(vector_layer)
+                feedback.pushInfo(
+                    f"Successfully added layer: {full_layer_name} (ID: {layer_id})"
+                )
+                added_count += 1
+
+            if added_count == 0:
+                feedback.reportError("No layers were successfully added")
+                return False
+
+            feedback.pushInfo(f"Total layers added: {added_count}")
+            return True
+
+        except Exception as e:
+            feedback.reportError(f"Error adding layer: {str(e)}")
+            import traceback
+
+            feedback.reportError(traceback.format_exc())
+            return False
 
     def name(self):
         """

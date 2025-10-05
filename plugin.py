@@ -1,7 +1,7 @@
 from qgis.core import QgsApplication
 from qgis.gui import QgisInterface
 
-from .moe_geoportal_loader_provider import MOELoaderProvider
+from .moe_geoportal_loader.moe_geoportal_loader_provider import MOELoaderProvider
 
 
 class MOEGeoportalLoader:

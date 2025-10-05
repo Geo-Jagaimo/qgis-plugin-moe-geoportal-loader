@@ -1,7 +1,12 @@
 DATASETS = {
-    "vegetation_survey": {
+    "vegetation_map_25000": {
         "name": "植生図（1/25,000）",
         "url_template": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/vgsk_{pref_code}/FeatureServer",
+        "has_prefecture": True,
+    },
+    "vegetation_map_50000": {
+        "name": "植生図（1/50,000）",
+        "url_template": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/vg_{pref_code}/FeatureServer",
         "has_prefecture": True,
     },
 }

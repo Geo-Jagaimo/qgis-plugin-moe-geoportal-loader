@@ -29,7 +29,12 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             for category_key, category in dataset["categories"].items():
                 display_name = f"{dataset['name']} - {category['name']}"
                 self._category_mapping.append(
-                    (dataset_key, category_key, display_name, category["has_prefecture"])
+                    (
+                        dataset_key,
+                        category_key,
+                        display_name,
+                        category["has_prefecture"],
+                    )
                 )
                 category_options.append(display_name)
 
@@ -37,21 +42,20 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterEnum(
                 self.CATEGORY,
-                self.tr("データセット - カテゴリ"),
+                self.tr("データセット"),
                 options=category_options,
                 defaultValue=0,
             )
         )
 
         # 都道府県
-        prefecture_names = [f"{code}: {name}" for code, name in PREFECTURES.items()]
+        prefecture_names = [name for name in PREFECTURES.values()]
         self.addParameter(
             QgsProcessingParameterEnum(
                 self.PREFECTURE,
                 self.tr("都道府県"),
                 options=prefecture_names,
                 defaultValue=0,
-                optional=True,
             )
         )
 
@@ -70,9 +74,9 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         """
         # 選択されたカテゴリインデックスからデータセットとカテゴリ情報を取得
         category_idx = self.parameterAsEnum(parameters, self.CATEGORY, context)
-        dataset_key, category_key, display_name, has_prefecture = self._category_mapping[
-            category_idx
-        ]
+        dataset_key, category_key, display_name, has_prefecture = (
+            self._category_mapping[category_idx]
+        )
 
         # データセットとカテゴリを取得
         dataset = DATASETS[dataset_key]
@@ -87,13 +91,14 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         # 都道府県別データの場合、都道府県コードを置換
         if has_prefecture:
             pref_idx = self.parameterAsEnum(parameters, self.PREFECTURE, context)
-            if pref_idx is not None:
-                pref_code = list(PREFECTURES.keys())[pref_idx]
-                url = url.format(pref_code=pref_code)
-                layer_name = f"{layer_name} ({PREFECTURES[pref_code]})"
-            else:
-                feedback.reportError("都道府県の選択が必要です")
+            if pref_idx is None or pref_idx == 0:
+                # pref_idx が 0 は「都道府県を選択してください」が選択されている
+                feedback.reportError("都道府県を選択してください")
                 return {"OUTPUT": None}
+
+            pref_code = list(PREFECTURES.keys())[pref_idx]
+            url = url.format(pref_code=pref_code)
+            layer_name = f"{layer_name} ({PREFECTURES[pref_code]})"
 
         feedback.pushInfo(f"Loading from: {url}")
 

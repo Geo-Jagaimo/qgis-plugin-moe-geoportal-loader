@@ -14,7 +14,7 @@ class MOELoaderProvider(QgsProcessingProvider):
         return "moe"
 
     def name(self, *args, **kwargs):
-        return self.tr("環境ジオポータルのデータを読み込む")
+        return "MOE Geoportal Loader"
 
     def icon(self):
         path = (Path(__file__).parent.parent / "imgs" / "icon.png").resolve()

@@ -82,9 +82,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
         feedback.pushInfo(f"Loading from: {url}")
 
-        result = self._load_and_write_layers(
-            url, parameters, context, feedback
-        )
+        result = self._load_and_write_layers(url, parameters, context, feedback)
 
         return {"OUTPUT": result}
 
@@ -114,7 +112,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
             layer_url = f"{url}/{layer_id}"
 
-            uri = f"crs='EPSG:4612' url='{layer_url}'"
+            uri = f"url='{layer_url}'"
 
             vector_layer = QgsVectorLayer(uri, "temp", "arcgisfeatureserver")
 

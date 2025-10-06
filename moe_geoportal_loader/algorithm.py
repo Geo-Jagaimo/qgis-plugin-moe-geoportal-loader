@@ -18,6 +18,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
     DATASET = "DATASET"
     CATEGORY = "CATEGORY"
     PREFECTURE = "PREFECTURE"
+    OUTPUT_TYPE = "OUTPUT_TYPE"
     OUTPUT = "OUTPUT"
 
     def initAlgorithm(self, config=None):
@@ -54,11 +55,34 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
+        # select output type
+        self.addParameter(
+            QgsProcessingParameterEnum(
+                self.OUTPUT_TYPE,
+                self.tr("出力形式"),
+                options=[
+                    self.tr("スタイル付きレイヤ"),
+                    self.tr("ファイルに保存"),
+                    self.tr("どちらも"),
+                ],
+                defaultValue=0,
+                optional=False,
+            )
+        )
+        self.parameterDefinition(self.OUTPUT_TYPE).setMetadata(
+            {
+                "widget_wrapper": {
+                    "useCheckBoxes": True,
+                    "columns": 3,
+                }
+            }
+        )
+
         # optional file output (skip by default)
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT,
-                self.tr("ファイルに保存"),
+                self.tr("出力先"),
                 optional=True,
                 createByDefault=False,
             )
@@ -88,18 +112,29 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
         feedback.pushInfo(f"Loading from: {url}")
 
-        # Always load as ArcGIS layer with styling
-        layer_id = self._load_as_arcgis_layer(
-            url,
-            dataset,
-            has_prefecture,
-            pref_idx if has_prefecture else None,
-            feedback,
-        )
+        # Get output type selection
+        output_type = self.parameterAsEnum(parameters, self.OUTPUT_TYPE, context)
+        # 0: スタイル付きレイヤ, 1: ファイルに保存, 2: どちらも
 
-        # Optionally save to file if output is specified
+        layer_id = None
         file_output = None
-        if parameters.get(self.OUTPUT):
+
+        # Load styled layer if requested (0 or 2)
+        if output_type == 0 or output_type == 2:
+            layer_id = self._load_as_arcgis_layer(
+                url,
+                dataset,
+                has_prefecture,
+                pref_idx if has_prefecture else None,
+                feedback,
+            )
+
+        if output_type == 1 or output_type == 2:
+            if not parameters.get(self.OUTPUT):
+                feedback.reportError(
+                    self.tr("ファイルに保存を選択した場合は出力先を指定してください")
+                )
+                return {"OUTPUT": None}
             file_output = self._save_to_file(url, parameters, context, feedback)
 
         return {"OUTPUT": file_output if file_output else layer_id}

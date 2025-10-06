@@ -61,9 +61,9 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 self.OUTPUT_TYPE,
                 self.tr("出力形式"),
                 options=[
-                    self.tr("スタイル付きレイヤ"),
+                    self.tr("ArcGIS Feature Service Layer（スタイル付きレイヤ）"),
                     self.tr("ファイルに保存"),
-                    self.tr("どちらも"),
+                    self.tr("両方"),
                 ],
                 defaultValue=0,
                 optional=False,
@@ -132,7 +132,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         if output_type == 1 or output_type == 2:
             if not parameters.get(self.OUTPUT):
                 feedback.reportError(
-                    self.tr("ファイルに保存を選択した場合は出力先を指定してください")
+                    self.tr("出力先が未指定のため、ファイルに保存できませんでした")
                 )
                 return {"OUTPUT": None}
             file_output = self._save_to_file(url, parameters, context, feedback)

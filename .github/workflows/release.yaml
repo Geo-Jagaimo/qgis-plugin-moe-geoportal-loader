@@ -14,11 +14,15 @@ jobs:
       - name: rename some files to rewrite
         run: |
           cp ./metadata.txt ./metadata.old.txt
-      # Write version information in metadata.txt from github release tag
+          cp ./pyproject.toml ./pyproject.old.toml
+      # Write version information in metadata.txt and pyproject.toml from github release tag
       - name: metadata
         run: |
-          sed -e "s/version={{PLUGIN_VERSION}}/version=${{ github.event.release.tag_name }}/g" ./metadata.old.txt > ./metadata.txt
-          rm ./metadata.old.txt
+          TAG=${{ github.event.release.tag_name }}
+          VERSION=${TAG#v}
+          sed -e "s/{{PLUGIN_VERSION}}/${VERSION}/g" ./metadata.old.txt > ./metadata.txt
+          sed -e 's/version = "0\.0\.0"/version = "'"${VERSION}"'"/g' ./pyproject.old.toml > ./pyproject.toml
+          rm ./metadata.old.txt ./pyproject.old.toml
       - name: Create Plugin Directory
         run: |
           mkdir ${{env.PLUGIN_NAME}}

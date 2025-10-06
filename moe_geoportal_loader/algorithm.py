@@ -75,7 +75,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         if has_prefecture:
             pref_idx = self.parameterAsEnum(parameters, self.PREFECTURE, context)
             if pref_idx is None or pref_idx == 0:
-                feedback.reportError("都道府県を選択してください")
+                feedback.reportError(self.tr("都道府県を選択してください"))
                 return {"OUTPUT": None}
 
             pref_code = list(PREFECTURES.keys())[pref_idx]
@@ -214,7 +214,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             )
 
             if sink is None:
-                feedback.reportError("Failed to create output sink")
+                feedback.reportError(self.tr("出力レイヤの作成に失敗しました"))
                 return None
 
             feedback.pushInfo(f"Output CRS: {output_crs.authid()}")

@@ -35,7 +35,7 @@ class MOEGeoportalLoader:
             icon, "環境ジオポータルのデータを読み込む", self.iface.mainWindow()
         )
         default_action.triggered.connect(
-            lambda: execAlgorithmDialog("moe:環境ジオポータルのデータを読み込む", {})
+            lambda: execAlgorithmDialog("moe:moe_geoportal_loader", {})
         )
         tool_button.setDefaultAction(default_action)
 

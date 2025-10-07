@@ -10,8 +10,8 @@ from qgis.core import (
 )
 from qgis.PyQt.QtCore import QCoreApplication
 
-from .datasets import DATASETS
-from .prefecture import PREFECTURES
+from .settings_datasets import DATASETS
+from .settings_prefecture import PREFECTURES
 
 
 class MOELoaderAlgorithm(QgsProcessingAlgorithm):

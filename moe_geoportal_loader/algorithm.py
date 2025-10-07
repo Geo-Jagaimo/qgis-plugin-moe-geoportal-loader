@@ -54,7 +54,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
-        # optional file output - in advanced settings
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT,

@@ -2,6 +2,8 @@ name: export_plugin
 on:
   release:
     types: [published]
+permissions:
+  contents: write
 
 env:
   PLUGIN_NAME: moe-geoportal-loader
@@ -9,7 +11,11 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.target_commitish }}
+          fetch-depth: 0
+          persist-credentials: true
       # Temporarily rename metadata file whose contents are to be rewritten
       - name: rename some files to rewrite
         run: |
@@ -21,8 +27,23 @@ jobs:
           TAG=${{ github.event.release.tag_name }}
           VERSION=${TAG#v}
           sed -e "s/{{PLUGIN_VERSION}}/${VERSION}/g" ./metadata.old.txt > ./metadata.txt
-          sed -e 's/version = "0\.0\.0"/version = "'"${VERSION}"'"/g' ./pyproject.old.toml > ./pyproject.toml
+          sed -E 's/^[[:space:]]*version *= *".*"/version = "'"${VERSION}"'"/' ./pyproject.old.toml > ./pyproject.toml
           rm ./metadata.old.txt ./pyproject.old.toml
+      - name: Commit and push version bump to repo
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=${{ github.event.release.tag_name }}
+          VERSION=${TAG#v}
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(release): bump pyproject version to ${VERSION}"
+            git push origin HEAD:${{ github.event.release.target_commitish }}
+          else
+            echo "No changes to commit"
+          fi
       - name: Create Plugin Directory
         run: |
           mkdir ${{env.PLUGIN_NAME}}

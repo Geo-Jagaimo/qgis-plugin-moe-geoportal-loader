@@ -18,7 +18,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
     DATASET = "DATASET"
     CATEGORY = "CATEGORY"
     PREFECTURE = "PREFECTURE"
-    OUTPUT_TYPE = "OUTPUT_TYPE"
     OUTPUT = "OUTPUT"
 
     def initAlgorithm(self, config=None):
@@ -55,34 +54,11 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
-        # select output type
-        self.addParameter(
-            QgsProcessingParameterEnum(
-                self.OUTPUT_TYPE,
-                self.tr("出力形式"),
-                options=[
-                    self.tr("ArcGIS Feature Service Layer（スタイル付きレイヤ）"),
-                    self.tr("ファイルに保存"),
-                    self.tr("両方"),
-                ],
-                defaultValue=0,
-                optional=False,
-            )
-        )
-        self.parameterDefinition(self.OUTPUT_TYPE).setMetadata(
-            {
-                "widget_wrapper": {
-                    "useCheckBoxes": True,
-                    "columns": 3,
-                }
-            }
-        )
-
-        # optional file output (skip by default)
+        # optional file output - in advanced settings
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT,
-                self.tr("出力先"),
+                self.tr("ファイルとして保存"),
                 optional=True,
                 createByDefault=False,
             )
@@ -112,32 +88,21 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
         feedback.pushInfo(f"Loading from: {url}")
 
-        # Get output type selection
-        output_type = self.parameterAsEnum(parameters, self.OUTPUT_TYPE, context)
-        # 0: スタイル付きレイヤ, 1: ファイルに保存, 2: どちらも
+        # Always load as styled layer
+        layer_id = self._load_as_arcgis_layer(
+            url,
+            dataset,
+            has_prefecture,
+            pref_idx if has_prefecture else None,
+            feedback,
+        )
 
-        layer_id = None
-        file_output = None
-
-        # Load styled layer if requested (0 or 2)
-        if output_type == 0 or output_type == 2:
-            layer_id = self._load_as_arcgis_layer(
-                url,
-                dataset,
-                has_prefecture,
-                pref_idx if has_prefecture else None,
-                feedback,
-            )
-
-        if output_type == 1 or output_type == 2:
-            if not parameters.get(self.OUTPUT):
-                feedback.reportError(
-                    self.tr("出力先が未指定のため、ファイルに保存できませんでした")
-                )
-                return {"OUTPUT": None}
+        # Optionally save to file if output path is specified in advanced settings
+        if parameters.get(self.OUTPUT):
             file_output = self._save_to_file(url, parameters, context, feedback)
+            return {"OUTPUT": file_output}
 
-        return {"OUTPUT": file_output if file_output else layer_id}
+        return {"OUTPUT": layer_id}
 
     def _load_as_arcgis_layer(self, url, dataset, has_prefecture, pref_idx, feedback):
         """Load layer directly as ArcGIS Feature Server layer with styling"""
@@ -282,7 +247,8 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
     def shortHelpString(self):
         return self.tr(
             "環境省のジオポータルサイトから提供されているArcGIS Feature ServiceのデータをQGISに読み込むためのツールです。\n"
-            "データセットと都道府県を選択し、ArcGIS Feature Serviceレイヤとして直接読み込むか、ファイルに保存するか、またはその両方を選択できます。"
+            "データセットと都道府県を選択すると、ArcGIS Feature Serviceレイヤとして直接読み込まれます。\n"
+            "詳細設定でファイル保存先を指定すると、レイヤの読み込みと同時にファイルへの保存も実行できます。"
         )
 
     def name(self):

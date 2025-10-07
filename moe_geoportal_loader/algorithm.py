@@ -279,6 +279,12 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             feedback.reportError(traceback.format_exc())
             return None
 
+    def shortHelpString(self):
+        return self.tr(
+            "環境省のジオポータルサイトから提供されているArcGIS Feature ServiceのデータをQGISに読み込むためのツールです。\n"
+            "データセットと都道府県を選択し、ArcGIS Feature Serviceレイヤとして直接読み込むか、ファイルに保存するか、またはその両方を選択できます。"
+        )
+
     def name(self):
         return "moe_geoportal_loader"
 

@@ -1,5 +1,5 @@
 [general]
-name=moe-geoportal-loader
+name=MOE Geoportal Loader
 qgisMinimumVersion=3.40
 description=環境省が提供する地理空間情報ポータルサイト「環境ジオポータル」のデータをQGISに直接読み込むためのプラグイン
 version={{PLUGIN_VERSION}}

@@ -175,6 +175,8 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
     def _save_to_file(self, url, parameters, context, feedback):
         try:
             import json
+            import os
+            import re
             from urllib.error import URLError
             from urllib.request import urlopen
 
@@ -247,6 +249,36 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                     feedback.setProgress(int((processed / total) * 100))
 
             feedback.pushInfo(f"Successfully wrote {processed} features")
+
+            # Save .qml
+            dest_str = dest_id or ""
+            output_path = None
+
+            try:
+                if "|" in dest_str:
+                    output_path = dest_str.split("|", 1)[0]
+                else:
+                    output_path = dest_str
+
+                if output_path.startswith("ogr:"):
+                    m = re.search(r"dbname='?([^' ]+)'?", output_path)
+                    if m:
+                        output_path = m.group(1)
+            except Exception:
+                output_path = None
+
+            if output_path and output_path not in ("memory:", ""):
+                base, _ = os.path.splitext(output_path)
+                qml_path = base + ".qml"
+                res, err = vector_layer.saveNamedStyle(qml_path)
+                if res:
+                    feedback.pushInfo(f"Saved style file: {qml_path}")
+                else:
+                    feedback.reportError(f"Failed to save style to {qml_path}: {err}")
+            else:
+                feedback.pushInfo(
+                    "Could not determine output file path; skipped writing .qml style."
+                )
 
             return dest_id
 

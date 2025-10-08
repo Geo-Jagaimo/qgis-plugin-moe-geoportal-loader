@@ -1,4 +1,5 @@
 from qgis.core import (
+    QgsCoordinateReferenceSystem,
     QgsFeatureSink,
     QgsField,
     QgsFields,
@@ -143,11 +144,24 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 feedback.reportError(f"Failed to load layer (ID: {layer_id})")
                 return None
 
+            # Set CRS from the service metadata
+            spatial_ref = data.get("spatialReference", {})
+            wkid = spatial_ref.get("latestWkid") or spatial_ref.get("wkid")
+
+            if wkid:
+                layer_crs = QgsCoordinateReferenceSystem(f"EPSG:{wkid}")
+                if layer_crs.isValid():
+                    vector_layer.setCrs(layer_crs)
+                    feedback.pushInfo(f"Layer CRS set to: {layer_crs.authid()}")
+                else:
+                    feedback.pushInfo(f"Layer CRS: {vector_layer.crs().authid()}")
+            else:
+                feedback.pushInfo(f"Layer CRS: {vector_layer.crs().authid()}")
+
             # Add layer to project with styling preserved
             QgsProject.instance().addMapLayer(vector_layer)
 
             feedback.pushInfo(f"Successfully loaded layer: {layer_name}")
-            feedback.pushInfo(f"CRS: {vector_layer.crs().authid()}")
 
             return vector_layer.id()
 

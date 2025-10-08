@@ -57,7 +57,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT,
-                self.tr("ファイルとして保存"),
+                self.tr("ファイルに保存"),
                 optional=True,
                 createByDefault=False,
             )
@@ -132,7 +132,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             layer_name = dataset["name"].replace("- 都道府県別", "").strip()
             if has_prefecture and pref_idx is not None:
                 prefecture_name = list(PREFECTURES.values())[pref_idx]
-                layer_name = f"{layer_name}_{prefecture_name}"
+                layer_name = f"{prefecture_name}_{layer_name}"
 
             layer_url = f"{url}/{layer_id}"
             uri = f"url='{layer_url}'"

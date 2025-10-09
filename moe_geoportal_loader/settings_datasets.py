@@ -94,19 +94,64 @@ DATASETS = {
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/ogasawara_v3_code2/FeatureServer",
         "has_prefecture": False,
     },
-    "sekisei_17": {
+    "sekiseishoko_17": {
         "name": "サンゴ浅海生態系現況把握調査（石西礁湖2017）",
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/sekiseishoko_2017/FeatureServer",
         "has_prefecture": False,
     },
-    "tokunoshima_5th": {
-        "name": "徳之島_第5回andR01Coralmap",
-        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_union_tokunoshima_5thandR01Coralmap/FeatureServer",
-        "has_prefecture": True,
+    "sb4_v2": {
+        "name": "サンゴ第４回（1988-1993）サンゴ礁地域分布地域",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/sb4_v2/FeatureServer",
+        "has_prefecture": False,
     },
-    "amami_4th": {
-        "name": "奄美大島_第4回andR01Coralmap",
+    "so4": {
+        "name": "サンゴ第４回（1988-1993）小笠原の小規模サンゴ礁分布地域",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/so4/FeatureServer",
+        "has_prefecture": False,
+    },
+    "sa4": {
+        "name": "サンゴ第４回（1988-1993）非サンゴ礁地域の分布地域",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/sa4/FeatureServer",
+        "has_prefecture": False,
+    },
+    "sb5": {
+        "name": "サンゴ第５回（1993-1999）分布地域",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/sa5/FeatureServer",
+        "has_prefecture": False,
+    },
+    "NtVeg2024": {
+        "name": "北方領土植生概況図",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/NtVeg2024/FeatureServer",
+        "has_prefecture": False,
+    },
+    "amamiooshima_H20andR01Coralmap": {
+        "name": "変化 union 奄美大島 H20andR01Coralmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_union_amamiooshima_H20andR01Coralmap/FeatureServer",
+        "has_prefecture": False,
+    },
+    "amamiooshima_4thandR01Coralmap": {
+        "name": "変化 union 奄美大島 第4回andR01Coralmap",
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_union_amamiooshima_4thandR01Coralmap/FeatureServer",
-        "has_prefecture": True,
+        "has_prefecture": False,
+    },
+    "amamiooshima_5thandR01Coralmap": {
+        "name": "変化 union 奄美大島 第5回andR01Coralmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_union_amamiooshima_5thandR01Coralmap/FeatureServer",
+        "has_prefecture": False,
+    },
+    "tokunoshima_H20andR01Coralmap": {
+        "name": "変化 union 徳之島 H20andR01Coralmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_union_tokunoshima_H20andR01Coralmap/FeatureServer",
+        "has_prefecture": False,
+    },
+    "tokunoshima_4thandR01Coralmap": {
+        "name": "変化 union 徳之島 第4回andR01Coralmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_union_tokunoshima_4thandR01Coralmap/FeatureServer",
+        "has_prefecture": False,
+    },
+    "tokunoshima_5thandR01Coralmap": {
+        "name": "変化 union 徳之島 第5回andR01Coralmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_union_tokunoshima_5thandR01Coralmap/FeatureServer",
+        "has_prefecture": False,
     },
 }

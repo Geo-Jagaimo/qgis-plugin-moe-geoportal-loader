@@ -73,7 +73,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         dataset = DATASETS[dataset_key]
         url = dataset["url"]
 
-        # validation for data that requires prefecture specification
         if has_prefecture:
             pref_idx = self.parameterAsEnum(parameters, self.PREFECTURE, context)
             if pref_idx is None or pref_idx == 0:
@@ -90,7 +89,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
         feedback.pushInfo(f"Loading from: {url}")
 
-        # Always load as styled layer
         layer_id = self._load_as_arcgis_layer(
             url,
             dataset,
@@ -99,7 +97,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             feedback,
         )
 
-        # Optionally save to file if output path is specified in advanced settings
         if parameters.get(self.OUTPUT):
             file_output = self._save_to_file(url, parameters, context, feedback)
             return {"OUTPUT": file_output}
@@ -107,17 +104,12 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         return {"OUTPUT": layer_id}
 
     def _fetch_json(self, url, feedback, error_context):
-        """Fetch JSON from URL with unified error handling."""
         try:
             import json
-            from urllib.error import URLError
             from urllib.request import urlopen
 
             with urlopen(url) as response:
                 return json.loads(response.read().decode())
-        except URLError as e:
-            feedback.reportError(f"{error_context}: {str(e)}")
-            return None
         except Exception as e:
             feedback.reportError(f"{error_context}: {str(e)}")
             return None
@@ -177,7 +169,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
     def _load_as_arcgis_layer(self, url, dataset, has_prefecture, pref_idx, feedback):
         try:
-            # 1) Load: resolve layer URL & metadata, build name, create layer
             resolved = self._resolve_layer_url_and_meta(url, feedback)
             if not resolved:
                 return None
@@ -190,7 +181,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             if vector_layer is None:
                 return None
 
-            # 2) CRS: set from Esri spatialReference
             self._set_vector_layer_crs(
                 vector_layer,
                 service_meta,
@@ -200,7 +190,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             project = QgsProject.instance()
             project.setCrs(project.crs())
 
-            # 3) Render: add to project
             QgsProject.instance().addMapLayer(vector_layer)
             feedback.pushInfo(f"Successfully loaded layer: {layer_name}")
             return vector_layer.id()
@@ -217,7 +206,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             import os
             import re
 
-            # --- Load: resolve layer URL + meta, then create vector layer ---
             resolved = self._resolve_layer_url_and_meta(url, feedback)
             if not resolved:
                 return None
@@ -227,7 +215,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             if vector_layer is None:
                 return None
 
-            # --- CRS: set from Esri spatialReference ---
             self._set_vector_layer_crs(
                 vector_layer,
                 service_meta,
@@ -235,7 +222,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 feedback,
             )
 
-            # --- Prepare clean field schema and output sink ---
             cleaned_fields = QgsFields()
             for field in vector_layer.fields():
                 new_field = QgsField(field)
@@ -243,7 +229,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 new_field.setComment("")
                 cleaned_fields.append(new_field)
 
-            # Set output CRS to layer CRS
             final_output_crs = vector_layer.crs()
 
             (sink, dest_id) = self.parameterAsSink(
@@ -293,7 +278,8 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                         if not geom.isEmpty():
                             geom.transform(transform)
                             new_f.setGeometry(geom)
-                    except Exception as _e:
+                    except Exception as e:
+                        feedback.pushInfo(f"Skipping feature due to transform error: {str(e)}")
                         continue
                 sink.addFeature(new_f, QgsFeatureSink.FastInsert)
                 processed += 1
@@ -302,22 +288,13 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
             feedback.pushInfo(f"Successfully wrote {processed} features")
 
-            # --- Save .qml style next to the data if possible ---
             dest_str = dest_id or ""
-            output_path = None
+            output_path = dest_str.split("|", 1)[0] if "|" in dest_str else dest_str
 
-            try:
-                if "|" in dest_str:
-                    output_path = dest_str.split("|", 1)[0]
-                else:
-                    output_path = dest_str
-
-                if output_path.startswith("ogr:"):
-                    m = re.search(r"dbname='?([^' ]+)'?", output_path)
-                    if m:
-                        output_path = m.group(1)
-            except Exception:
-                output_path = None
+            if output_path and output_path.startswith("ogr:"):
+                m = re.search(r"dbname='?([^' ]+)'?", output_path)
+                if m:
+                    output_path = m.group(1)
 
             if output_path and output_path not in ("memory:", ""):
                 base, _ = os.path.splitext(output_path)
@@ -342,10 +319,10 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             return None
 
     def _crs_from_esri_spatial_ref(self, spatial_ref, feedback):
-        try:
-            if not spatial_ref:
-                return None
+        if not spatial_ref:
+            return None
 
+        try:
             wkid = spatial_ref.get("latestWkid") or spatial_ref.get("wkid")
 
             esri_to_epsg = {
@@ -356,15 +333,11 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 wkid = esri_to_epsg[wkid]
 
             if wkid:
-                try:
-                    wkid_int = int(wkid)
-                    crs = QgsCoordinateReferenceSystem.fromEpsgId(wkid_int)
-                    if crs.isValid():
-                        return crs
-                except Exception:
-                    pass
+                wkid_int = int(wkid)
+                crs = QgsCoordinateReferenceSystem.fromEpsgId(wkid_int)
+                if crs.isValid():
+                    return crs
 
-            # Fallback to WKT if provided
             wkt = spatial_ref.get("wkt") or spatial_ref.get("latestWkt")
             if wkt:
                 crs = QgsCoordinateReferenceSystem()
@@ -372,6 +345,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                     return crs
         except Exception as e:
             feedback.reportError(f"CRS parse error: {str(e)}")
+
         return None
 
     def shortHelpString(self):

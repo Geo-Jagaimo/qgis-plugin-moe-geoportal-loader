@@ -6,7 +6,7 @@ permissions:
   contents: write
 
 env:
-  PLUGIN_NAME: moe-geoportal-loader
+  PLUGIN_NAME: moe_geoportal_loader
 jobs:
   release:
     runs-on: ubuntu-latest

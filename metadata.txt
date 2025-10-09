@@ -15,5 +15,5 @@ email=geo.jagaimo@gmail.com
 homepage=https://github.com/Geo-Jagaimo/qgis-plugin-moe-geoportal-loader
 tracker=https://github.com/Geo-Jagaimo/qgis-plugin-moe-geoportal-loader/issues
 repository=https://github.com/Geo-Jagaimo/qgis-plugin-moe-geoportal-loader
-tags=
+tags=python, open data, arcgis
 category=

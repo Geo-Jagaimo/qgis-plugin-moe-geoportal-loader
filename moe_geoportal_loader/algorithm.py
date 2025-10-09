@@ -279,7 +279,9 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                             geom.transform(transform)
                             new_f.setGeometry(geom)
                     except Exception as e:
-                        feedback.pushInfo(f"Skipping feature due to transform error: {str(e)}")
+                        feedback.pushInfo(
+                            f"Skipping feature due to transform error: {str(e)}"
+                        )
                         continue
                 sink.addFeature(new_f, QgsFeatureSink.FastInsert)
                 processed += 1
@@ -351,7 +353,8 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
     def shortHelpString(self):
         return self.tr(
             "環境省が提供する地理空間情報ポータルサイト「環境ジオポータル」のデータをQGISに直接読み込むためのプラグインです。\n"
-            "データセットを選択すると、ArcGIS Feature Serviceレイヤとしてスタイル付きで読み込まれ、必要に応じてファイル保存も同時に行えます。"
+            "データセットを選択すると、ArcGIS Feature Serviceレイヤとして、設定されたスタイル付きで読み込まれます。\n"
+            "必要に応じてファイル保存も同時に行うことができ、保存時にはスタイルも自動的に保存されます。"
         )
 
     def name(self):

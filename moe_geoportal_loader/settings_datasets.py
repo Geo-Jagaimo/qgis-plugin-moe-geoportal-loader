@@ -154,4 +154,129 @@ DATASETS = {
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_union_tokunoshima_5thandR01Coralmap/FeatureServer",
         "has_prefecture": False,
     },
+    "kume_H20vsH30corlalmap": {
+        "name": "変化域 kume H20vsH30corlalmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_kume_H20vsH30corlalmap/FeatureServer",
+        "has_prefecture": False,
+    },
+    "kume_4thvsH30corlalmap": {
+        "name": "変化域 kume 第4回vsH30corlalmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_kume_4thvsH30corlalmap/FeatureServer",
+        "has_prefecture": False,
+    },
+    "miyako_H20vsH30corlalmap": {
+        "name": "変化域 miyako H20vsH30corlalmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_miyako_H20vsH30corlalmap/FeatureServer",
+        "has_prefecture": False,
+    },
+    "miyako_4thvsH30corlalmap": {
+        "name": "変化域 miyako 第4回vsH30corlalmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_miyako_4thvsH30corlalmap/FeatureServer",
+        "has_prefecture": False,
+    },
+    "ogasawara_H20vsH30corlalmap": {
+        "name": "変化域 ogasawara H20vsH30corlalmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_ogasawara_H20vsH30corlalmap/FeatureServer",
+        "has_prefecture": False,
+    },
+    "ogasawara_4thvsR02corlalmap": {
+        "name": "変化域 ogasawara 第4回vsR02corlalmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_ogasawara_4thvsR02corlalmap/FeatureServer",
+        "has_prefecture": False,
+    },
+    "ogasawara_5thvsR02corlalmap": {
+        "name": "変化域 ogasawara 第5回vsR02corlalmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_ogasawara_5thvsR02corlalmap/FeatureServer",
+        "has_prefecture": False,
+    },
+    "okinoerabu_H20vsH30corlalmap": {
+        "name": "変化域 okinoerabu H20vsH30corlalmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_okinoerabu_H20vsH30corlalmap/FeatureServer",
+        "has_prefecture": False,
+    },
+    "okinoerabu_4thvsH30corlalmap": {
+        "name": "変化域 okinoerabu 第4回vsH30corlalmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_okinoerabu_4thvsH30corlalmap/FeatureServer",
+        "has_prefecture": False,
+    },
+    "tarama_H20vsH30corlalmap": {
+        "name": "変化域 tarama H20vsH30corlalmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_tarama_H20vsH30corlalmap/FeatureServer",
+        "has_prefecture": False,
+    },
+    "tarama_4thvsH30corlalmap": {
+        "name": "変化域 tarama 第4回vsH30corlalmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_tarama_4thvsH30corlalmap/FeatureServer",
+        "has_prefecture": False,
+    },
+    "yoron_H20vsH30corlalmap": {
+        "name": "変化域 yoron H20vsH30corlalmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_yoron_H20vsH30corlalmap/FeatureServer",
+        "has_prefecture": False,
+    },
+    "yoron_4thvsH30corlalmap": {
+        "name": "変化域 yoron 第4回vsH30corlalmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_yoron_4thvsH30corlalmap/FeatureServer",
+        "has_prefecture": False,
+    },
+    "takarajima_kodakarajima_H20vsR03corlalmap": {
+        "name": "変化域 宝島 小宝島 H20vsR03corlalmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_takarajima_kodakarajima_H20vsR03corlalmap/FeatureServer",
+        "has_prefecture": False,
+    },
+    "takarajima_kodakarajima_4thvsR03corlalmap": {
+        "name": "変化域 宝島 小宝島 第4回vsR03corlalmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_takarajima_kodakarajima_4thvsR03corlalmap/FeatureServer",
+        "has_prefecture": False,
+    },
+    "tanegashima_yakushima_H20vsR03corlalmap": {
+        "name": "変化域 種子島 屋久島 H20vsR03corlalmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_tanegashima_yakushima_H20vsR03corlalmap/FeatureServer",
+        "has_prefecture": False,
+    },
+    "tanegashima_yakushima_4thvsR03corlalmap": {
+        "name": "変化域 種子島 屋久島 第4回vsR03corlalmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_tanegashima_yakushima_4thvsR03corlalmap/FeatureServer",
+        "has_prefecture": False,
+    },
+    "tanegashima_yakushima_5thvsR03corlalmap": {
+        "name": "変化域 種子島 屋久島 第5回vsR03corlalmap",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_tanegashima_yakushima_5thvsR03corlalmap/FeatureServer",
+        "has_prefecture": False,
+    },
+    "mo4_v2": {
+        "name": "藻場調査第４回（1988-1993）",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/mo4_v2/FeatureServer",
+        "has_prefecture": False,
+    },
+    "mo5_v5": {
+        "name": "藻場調査第５回（1993-1999）",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/mo5_v5/FeatureServer",
+        "has_prefecture": False,
+    },
+    "UTM51_NEW": {
+        "name": "藻場調査（2018-2020、UTM51の範囲）",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/UTM51_NEW/FeatureServer",
+        "has_prefecture": False,
+    },
+    "UTM52_NEW": {
+        "name": "藻場調査（2018-2020、UTM52の範囲）",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/UTM52_NEW/FeatureServer",
+        "has_prefecture": False,
+    },
+    "UTM53_NEW": {
+        "name": "藻場調査（2018-2020、UTM53の範囲）",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/UTM53_NEW/FeatureServer",
+        "has_prefecture": False,
+    },
+    "UTM54_NEW": {
+        "name": "藻場調査（2018-2020、UTM54の範囲）",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/UTM54_NEW/FeatureServer",
+        "has_prefecture": False,
+    },
+    "UTM55_NEW": {
+        "name": "藻場調査（2018-2020、UTM55の範囲）",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/UTM55_NEW/FeatureServer",
+        "has_prefecture": False,
+    },
 }

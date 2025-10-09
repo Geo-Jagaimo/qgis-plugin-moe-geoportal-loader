@@ -1,5 +1,7 @@
 from qgis.core import (
     QgsCoordinateReferenceSystem,
+    QgsCoordinateTransform,
+    QgsFeature,
     QgsFeatureSink,
     QgsField,
     QgsFields,
@@ -104,65 +106,103 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
         return {"OUTPUT": layer_id}
 
-    def _load_as_arcgis_layer(self, url, dataset, has_prefecture, pref_idx, feedback):
-        """Load layer directly as ArcGIS Feature Server layer with styling"""
+    def _fetch_json(self, url, feedback, error_context):
+        """Fetch JSON from URL with unified error handling."""
         try:
             import json
             from urllib.error import URLError
             from urllib.request import urlopen
 
-            try:
-                with urlopen(f"{url}?f=json") as response:
-                    data = json.loads(response.read().decode())
-            except URLError as e:
-                feedback.reportError(
-                    f"Failed to fetch FeatureServer metadata: {str(e)}"
-                )
+            with urlopen(url) as response:
+                return json.loads(response.read().decode())
+        except URLError as e:
+            feedback.reportError(f"{error_context}: {str(e)}")
+            return None
+        except Exception as e:
+            feedback.reportError(f"{error_context}: {str(e)}")
+            return None
+
+    def _resolve_layer_url_and_meta(self, url, feedback):
+        service_meta = self._fetch_json(
+            f"{url}?f=json", feedback, "Failed to fetch FeatureServer metadata"
+        )
+        if not service_meta:
+            return None
+
+        layers = service_meta.get("layers", [])
+        if not layers:
+            feedback.reportError(f"No layers found in FeatureServer: {url}")
+            return None
+
+        first_layer = layers[0]
+        layer_id = first_layer.get("id")
+        layer_url = f"{url}/{layer_id}"
+
+        layer_meta = (
+            self._fetch_json(
+                f"{layer_url}?f=json", feedback, "Failed to fetch layer metadata"
+            )
+            or {}
+        )
+
+        return (layer_url, service_meta, layer_meta)
+
+    def _build_layer_name(self, dataset, has_prefecture, pref_idx):
+        layer_name = dataset["name"].replace("- 都道府県別", "").strip()
+        if has_prefecture and pref_idx is not None:
+            prefecture_name = list(PREFECTURES.values())[pref_idx]
+            layer_name = f"{prefecture_name}_{layer_name}"
+        return layer_name
+
+    def _create_arcgis_vector_layer(self, layer_url, layer_name, feedback):
+        uri = f"url='{layer_url}'"
+        vector_layer = QgsVectorLayer(uri, layer_name, "arcgisfeatureserver")
+        if not vector_layer.isValid():
+            feedback.reportError(f"Failed to load layer (URL: {layer_url})")
+            return None
+        return vector_layer
+
+    def _set_vector_layer_crs(self, vector_layer, service_meta, layer_meta, feedback):
+        spatial_ref = (
+            (layer_meta.get("extent") or {}).get("spatialReference")
+            or layer_meta.get("spatialReference")
+            or service_meta.get("spatialReference", {})
+        )
+        layer_crs = self._crs_from_esri_spatial_ref(spatial_ref, feedback)
+        if layer_crs and layer_crs.isValid():
+            vector_layer.setCrs(layer_crs)
+            feedback.pushInfo(f"Layer CRS set to: {layer_crs.authid()}")
+        else:
+            feedback.pushInfo(f"Layer CRS: {vector_layer.crs().authid()}")
+
+    def _load_as_arcgis_layer(self, url, dataset, has_prefecture, pref_idx, feedback):
+        try:
+            # 1) Load: resolve layer URL & metadata, build name, create layer
+            resolved = self._resolve_layer_url_and_meta(url, feedback)
+            if not resolved:
+                return None
+            layer_url, service_meta, layer_meta = resolved
+
+            layer_name = self._build_layer_name(dataset, has_prefecture, pref_idx)
+            vector_layer = self._create_arcgis_vector_layer(
+                layer_url, layer_name, feedback
+            )
+            if vector_layer is None:
                 return None
 
-            layers = data.get("layers", [])
+            # 2) CRS: set from Esri spatialReference
+            self._set_vector_layer_crs(
+                vector_layer,
+                service_meta,
+                layer_meta,
+                feedback,
+            )
+            project = QgsProject.instance()
+            project.setCrs(project.crs())
 
-            if not layers:
-                feedback.reportError(f"No layers found in FeatureServer: {url}")
-                return None
-
-            first_layer = layers[0]
-            layer_id = first_layer.get("id")
-
-            # Build layer name from dataset name and prefecture
-            layer_name = dataset["name"].replace("- 都道府県別", "").strip()
-            if has_prefecture and pref_idx is not None:
-                prefecture_name = list(PREFECTURES.values())[pref_idx]
-                layer_name = f"{prefecture_name}_{layer_name}"
-
-            layer_url = f"{url}/{layer_id}"
-            uri = f"url='{layer_url}'"
-
-            vector_layer = QgsVectorLayer(uri, layer_name, "arcgisfeatureserver")
-
-            if not vector_layer.isValid():
-                feedback.reportError(f"Failed to load layer (ID: {layer_id})")
-                return None
-
-            # Set CRS from the service metadata
-            spatial_ref = data.get("spatialReference", {})
-            wkid = spatial_ref.get("latestWkid") or spatial_ref.get("wkid")
-
-            if wkid:
-                layer_crs = QgsCoordinateReferenceSystem(f"EPSG:{wkid}")
-                if layer_crs.isValid():
-                    vector_layer.setCrs(layer_crs)
-                    feedback.pushInfo(f"Layer CRS set to: {layer_crs.authid()}")
-                else:
-                    feedback.pushInfo(f"Layer CRS: {vector_layer.crs().authid()}")
-            else:
-                feedback.pushInfo(f"Layer CRS: {vector_layer.crs().authid()}")
-
-            # Add layer to project with styling preserved
+            # 3) Render: add to project
             QgsProject.instance().addMapLayer(vector_layer)
-
             feedback.pushInfo(f"Successfully loaded layer: {layer_name}")
-
             return vector_layer.id()
 
         except Exception as e:
@@ -174,49 +214,37 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
     def _save_to_file(self, url, parameters, context, feedback):
         try:
-            import json
             import os
             import re
-            from urllib.error import URLError
-            from urllib.request import urlopen
 
-            try:
-                with urlopen(f"{url}?f=json") as response:
-                    data = json.loads(response.read().decode())
-            except URLError as e:
-                feedback.reportError(
-                    f"Failed to fetch FeatureServer metadata: {str(e)}"
-                )
+            # --- Load: resolve layer URL + meta, then create vector layer ---
+            resolved = self._resolve_layer_url_and_meta(url, feedback)
+            if not resolved:
+                return None
+            layer_url, service_meta, layer_meta = resolved
+
+            vector_layer = self._create_arcgis_vector_layer(layer_url, "temp", feedback)
+            if vector_layer is None:
                 return None
 
-            layers = data.get("layers", [])
+            # --- CRS: set from Esri spatialReference ---
+            self._set_vector_layer_crs(
+                vector_layer,
+                service_meta,
+                layer_meta,
+                feedback,
+            )
 
-            if not layers:
-                feedback.reportError(f"No layers found in FeatureServer: {url}")
-                return None
-
-            first_layer = layers[0]
-            layer_id = first_layer.get("id")
-
-            layer_url = f"{url}/{layer_id}"
-
-            uri = f"url='{layer_url}'"
-
-            vector_layer = QgsVectorLayer(uri, "temp", "arcgisfeatureserver")
-
-            if not vector_layer.isValid():
-                feedback.reportError(f"Failed to load layer (ID: {layer_id})")
-                return None
-
+            # --- Prepare clean field schema and output sink ---
             cleaned_fields = QgsFields()
             for field in vector_layer.fields():
-                # create new fields
                 new_field = QgsField(field)
                 new_field.setAlias("")
                 new_field.setComment("")
                 cleaned_fields.append(new_field)
 
-            output_crs = vector_layer.crs()
+            # Set output CRS to layer CRS
+            final_output_crs = vector_layer.crs()
 
             (sink, dest_id) = self.parameterAsSink(
                 parameters,
@@ -224,7 +252,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 context,
                 cleaned_fields,
                 vector_layer.wkbType(),
-                output_crs,
+                final_output_crs,
                 QgsFeatureSink.SinkFlags(),
             )
 
@@ -232,25 +260,49 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 feedback.reportError(self.tr("出力レイヤの作成に失敗しました"))
                 return None
 
-            feedback.pushInfo(f"Output CRS: {output_crs.authid()}")
+            feedback.pushInfo(
+                f"Output CRS: {final_output_crs.authid() if final_output_crs.isValid() else 'Unknown'}"
+            )
 
             total = vector_layer.featureCount()
             feedback.pushInfo(f"Writing {total} features to output...")
 
             processed = 0
+            needs_transform = final_output_crs.isValid() and (
+                final_output_crs.authid() != vector_layer.crs().authid()
+            )
+            if needs_transform:
+                feedback.pushInfo(
+                    f"Reprojecting on save: {vector_layer.crs().authid()} → {final_output_crs.authid()}"
+                )
+                transform = QgsCoordinateTransform(
+                    vector_layer.crs(),
+                    final_output_crs,
+                    QgsProject.instance().transformContext(),
+                )
+            else:
+                transform = None
+
             for feature in vector_layer.getFeatures():
                 if feedback.isCanceled():
                     break
-
-                sink.addFeature(feature, QgsFeatureSink.FastInsert)
+                new_f = QgsFeature(feature)
+                if transform and new_f.hasGeometry():
+                    try:
+                        geom = new_f.geometry()
+                        if not geom.isEmpty():
+                            geom.transform(transform)
+                            new_f.setGeometry(geom)
+                    except Exception as _e:
+                        continue
+                sink.addFeature(new_f, QgsFeatureSink.FastInsert)
                 processed += 1
-
                 if total > 0:
                     feedback.setProgress(int((processed / total) * 100))
 
             feedback.pushInfo(f"Successfully wrote {processed} features")
 
-            # Save .qml
+            # --- Save .qml style next to the data if possible ---
             dest_str = dest_id or ""
             output_path = None
 
@@ -283,11 +335,44 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             return dest_id
 
         except Exception as e:
-            feedback.reportError(f"Error loading layers: {str(e)}")
+            feedback.reportError(f"Error saving layer: {str(e)}")
             import traceback
 
             feedback.reportError(traceback.format_exc())
             return None
+
+    def _crs_from_esri_spatial_ref(self, spatial_ref, feedback):
+        try:
+            if not spatial_ref:
+                return None
+
+            wkid = spatial_ref.get("latestWkid") or spatial_ref.get("wkid")
+
+            esri_to_epsg = {
+                102100: 3857,
+                102113: 3857,
+            }
+            if wkid in esri_to_epsg:
+                wkid = esri_to_epsg[wkid]
+
+            if wkid:
+                try:
+                    wkid_int = int(wkid)
+                    crs = QgsCoordinateReferenceSystem.fromEpsgId(wkid_int)
+                    if crs.isValid():
+                        return crs
+                except Exception:
+                    pass
+
+            # Fallback to WKT if provided
+            wkt = spatial_ref.get("wkt") or spatial_ref.get("latestWkt")
+            if wkt:
+                crs = QgsCoordinateReferenceSystem()
+                if crs.createFromWkt(wkt):
+                    return crs
+        except Exception as e:
+            feedback.reportError(f"CRS parse error: {str(e)}")
+        return None
 
     def shortHelpString(self):
         return self.tr(

@@ -9,6 +9,11 @@ DATASETS = {
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/vgsk_{pref_code}/FeatureServer",
         "has_prefecture": True,
     },
+    "veg2024bk4": {
+        "name": "現存植生図2024 北陸ブロック",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/veg2024bk4/FeatureServer",
+        "has_prefecture": False,
+    },
     "anaguma": {
         "name": "中大型哺乳類分布調査（アナグマ）",
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/anaguma/FeatureServer",

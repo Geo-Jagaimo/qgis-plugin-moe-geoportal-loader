@@ -4,13 +4,43 @@ on:
   pull_request:
     branches:
       - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
 env:
-  # Docker settings
   DOCKER_IMAGE: qgis/qgis
 
 jobs:
-  Test-plugin:
+  unit-tests:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Validate sources
+        run: python -m compileall plugin.py data_loader
+
+      - name: Run unit tests
+        run: python -m unittest discover -s test -p "test_*.py"
+
+  qgis-integration:
+    needs: unit-tests
+    if: >
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-qgis-tests'))
     runs-on: ubuntu-latest
 
     strategy:
@@ -46,3 +76,7 @@ jobs:
       - name: Docker run plugin tests
         run: |
           docker exec qgis-testing-environment sh -c "qgis_testrunner.sh plugin_dir.test.test_suite.test_package"
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f qgis-testing-environment

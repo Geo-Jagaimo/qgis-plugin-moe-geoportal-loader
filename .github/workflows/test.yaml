@@ -15,8 +15,7 @@ jobs:
 
     strategy:
       matrix:
-        # Test only on the latest stable version for faster CI
-        docker_tags: [release-3_34]
+        docker_tags: [release-3_34, release-3_40]
 
     steps:
       - name: Checkout
@@ -32,6 +31,11 @@ jobs:
           docker exec qgis-testing-environment sh -c "qgis_setup.sh plugin_dir"
           docker exec qgis-testing-environment sh -c "rm -f /root/.local/share/QGIS/QGIS3/profiles/default/python/plugins/plugin_dir"
           docker exec qgis-testing-environment sh -c "ln -s /tests_directory/plugin_dir /root/.local/share/QGIS/QGIS3/profiles/default/python/plugins/plugin_dir"
+
+      - name: Start Xvfb
+        run: |
+          docker exec -d qgis-testing-environment sh -c "Xvfb :99 -screen 0 1024x768x24 -nolisten tcp &"
+          sleep 3
 
       - name: Docker run plugin tests
         run: |

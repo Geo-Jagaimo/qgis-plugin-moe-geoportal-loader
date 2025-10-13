@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
@@ -6,13 +8,14 @@ from qgis.core import (
     QgsField,
     QgsFields,
     QgsProcessingAlgorithm,
+    QgsProcessingContext,
     QgsProcessingParameterBoolean,
     QgsProcessingParameterEnum,
     QgsProcessingParameterFeatureSink,
     QgsProject,
     QgsVectorLayer,
 )
-from qgis.PyQt.QtCore import QCoreApplication
+from qgis.PyQt.QtCore import QCoreApplication, QUrl
 
 from .settings_datasets import DATASETS
 from .settings_prefecture import PREFECTURES
@@ -114,7 +117,15 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             feedback.reportError(self.tr("出力レイヤの保存先を指定してください"))
             return {"OUTPUT": None}
 
-        file_output = self._save_to_file(url, parameters, context, feedback)
+        file_output = self._save_to_file(
+            url,
+            parameters,
+            context,
+            feedback,
+            dataset=dataset,
+            has_prefecture=has_prefecture,
+            pref_idx=pref_idx if has_prefecture else None,
+        )
         return {"OUTPUT": file_output}
 
     def _fetch_json(self, url, feedback, error_context):
@@ -215,7 +226,16 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             feedback.reportError(traceback.format_exc())
             return None
 
-    def _save_to_file(self, url, parameters, context, feedback):
+    def _save_to_file(
+        self,
+        url,
+        parameters,
+        context,
+        feedback,
+        dataset=None,
+        has_prefecture=False,
+        pref_idx=None,
+    ):
         try:
             import os
             import re
@@ -304,6 +324,8 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
             feedback.pushInfo(f"Successfully wrote {processed} features")
 
+            del sink
+
             dest_str = dest_id or ""
             output_path = dest_str.split("|", 1)[0] if "|" in dest_str else dest_str
 
@@ -320,6 +342,28 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                     feedback.pushInfo(f"Saved style file: {qml_path}")
                 else:
                     feedback.reportError(f"Failed to save style to {qml_path}: {err}")
+
+                # Load the saved layer and add it to the project with style
+                layer_name = (
+                    self._build_layer_name(dataset, has_prefecture, pref_idx)
+                    if dataset
+                    else "MOE Layer"
+                )
+                saved_layer = QgsVectorLayer(output_path, layer_name, "ogr")
+
+                if saved_layer.isValid():
+                    # QML will be automatically loaded by QGIS from the .qml file
+                    QgsProject.instance().addMapLayer(saved_layer)
+                    feedback.pushInfo(f"Added layer to project: {layer_name}")
+                    # Store the layer for context
+                    context.addLayerToLoadOnCompletion(
+                        saved_layer.id(),
+                        QgsProcessingContext.LayerDetails(
+                            layer_name, QgsProject.instance(), self.OUTPUT
+                        ),
+                    )
+                else:
+                    feedback.reportError(f"Could not load saved layer: {output_path}")
             else:
                 feedback.pushInfo(
                     "Could not determine output file path; skipped writing .qml style."
@@ -363,6 +407,33 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             feedback.reportError(f"CRS parse error: {str(e)}")
 
         return None
+
+    def _file_path_from_source(self, layer):
+        src = layer.source() or ""
+        base = src.split("|", 1)[0]
+        if base.startswith("file:"):
+            base = QUrl(base).toLocalFile()
+        return base
+
+    def _apply_qml_if_exists(self, layer, feedback):
+        path = self._file_path_from_source(layer)
+        if not path:
+            return
+        p = Path(path)
+        if not p.exists():
+            return
+        candidates = [p.with_suffix(".qml")]
+        if p.suffix.lower() in [".gpkg", ".sqlite"]:
+            candidates.append(p.parent / f"{p.stem}_{layer.name()}.qml")
+        for qml in candidates:
+            if qml.exists():
+                ok, err = layer.loadNamedStyle(str(qml))
+                if ok:
+                    layer.triggerRepaint()
+                    feedback.pushInfo(f"Applied QML style: {qml}")
+                else:
+                    feedback.pushInfo(f"Failed to apply QML style: {err}")
+                break
 
     def shortHelpString(self):
         return self.tr(

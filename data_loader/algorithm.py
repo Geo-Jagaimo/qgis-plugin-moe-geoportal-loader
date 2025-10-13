@@ -110,6 +110,10 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             )
             return {"OUTPUT": layer_id}
 
+        if not parameters.get(self.OUTPUT):
+            feedback.reportError(self.tr("出力レイヤの保存先を指定してください"))
+            return {"OUTPUT": None}
+
         file_output = self._save_to_file(url, parameters, context, feedback)
         return {"OUTPUT": file_output}
 

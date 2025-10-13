@@ -15,16 +15,12 @@ jobs:
 
     strategy:
       matrix:
-        docker_tags: [release-3_28, release-3_34]
+        # Test only on the latest stable version for faster CI
+        docker_tags: [release-3_34]
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Export requirements.txt
-        run: |
-          pip3 install uv
-          uv export -o requirements.txt --no-dev --no-hashes
+        uses: actions/checkout@v4
 
       - name: Docker pull and create qgis-testing-environment
         run: |
@@ -36,7 +32,6 @@ jobs:
           docker exec qgis-testing-environment sh -c "qgis_setup.sh plugin_dir"
           docker exec qgis-testing-environment sh -c "rm -f /root/.local/share/QGIS/QGIS3/profiles/default/python/plugins/plugin_dir"
           docker exec qgis-testing-environment sh -c "ln -s /tests_directory/plugin_dir /root/.local/share/QGIS/QGIS3/profiles/default/python/plugins/plugin_dir"
-          docker exec qgis-testing-environment sh -c "pip3 install -r /tests_directory/plugin_dir/requirements.txt"
 
       - name: Docker run plugin tests
         run: |

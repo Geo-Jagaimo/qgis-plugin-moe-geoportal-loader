@@ -6,6 +6,7 @@ from qgis.core import (
     QgsField,
     QgsFields,
     QgsProcessingAlgorithm,
+    QgsProcessingParameterBoolean,
     QgsProcessingParameterEnum,
     QgsProcessingParameterFeatureSink,
     QgsProject,
@@ -21,6 +22,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
     DATASET = "DATASET"
     CATEGORY = "CATEGORY"
     PREFECTURE = "PREFECTURE"
+    ADD_AS_ARCGIS_LAYER = "ADD_AS_ARCGIS_LAYER"
     OUTPUT = "OUTPUT"
 
     def initAlgorithm(self, config=None):
@@ -36,7 +38,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             )
             dataset_options.append(dataset["name"])
 
-        # select dataset
         self.addParameter(
             QgsProcessingParameterEnum(
                 self.CATEGORY,
@@ -46,7 +47,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
-        # select prefecture
         prefecture_names = [name for name in PREFECTURES.values()]
         self.addParameter(
             QgsProcessingParameterEnum(
@@ -58,10 +58,17 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         )
 
         self.addParameter(
+            QgsProcessingParameterBoolean(
+                self.ADD_AS_ARCGIS_LAYER,
+                self.tr("ArcGIS REST Server layerとして追加"),
+                defaultValue=False,
+            )
+        )
+
+        self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT,
-                self.tr("ファイルに保存"),
-                optional=True,
+                self.tr("出力レイヤ"),
                 createByDefault=False,
             )
         )
@@ -89,19 +96,22 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
         feedback.pushInfo(f"Loading from: {url}")
 
-        layer_id = self._load_as_arcgis_layer(
-            url,
-            dataset,
-            has_prefecture,
-            pref_idx if has_prefecture else None,
-            feedback,
+        add_as_arcgis_layer = self.parameterAsBool(
+            parameters, self.ADD_AS_ARCGIS_LAYER, context
         )
 
-        if parameters.get(self.OUTPUT):
-            file_output = self._save_to_file(url, parameters, context, feedback)
-            return {"OUTPUT": file_output}
+        if add_as_arcgis_layer:
+            layer_id = self._load_as_arcgis_layer(
+                url,
+                dataset,
+                has_prefecture,
+                pref_idx if has_prefecture else None,
+                feedback,
+            )
+            return {"OUTPUT": layer_id}
 
-        return {"OUTPUT": layer_id}
+        file_output = self._save_to_file(url, parameters, context, feedback)
+        return {"OUTPUT": file_output}
 
     def _fetch_json(self, url, feedback, error_context):
         try:

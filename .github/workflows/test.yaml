@@ -38,6 +38,11 @@ jobs:
           docker exec qgis-testing-environment sh -c "ln -s /tests_directory/plugin_dir /root/.local/share/QGIS/QGIS3/profiles/default/python/plugins/plugin_dir"
           docker exec qgis-testing-environment sh -c "pip3 install -r /tests_directory/plugin_dir/requirements.txt"
 
+      - name: Start Xvfb
+        run: |
+          docker exec qgis-testing-environment sh -c "nohup Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &"
+          docker exec qgis-testing-environment sh -c "sleep 2"
+
       - name: Docker run plugin tests
         run: |
           docker exec qgis-testing-environment sh -c "qgis_testrunner.sh plugin_dir.test_suite.test_package"

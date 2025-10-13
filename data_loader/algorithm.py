@@ -1,5 +1,9 @@
+import json
+import os
+import re
 import traceback
 from pathlib import Path
+from urllib.request import urlopen
 
 from qgis.core import (
     QgsCoordinateReferenceSystem,
@@ -131,9 +135,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
     def _fetch_json(self, url, feedback, error_context):
         try:
-            import json
-            from urllib.request import urlopen
-
             with urlopen(url) as response:
                 return json.loads(response.read().decode())
         except Exception as e:
@@ -198,8 +199,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         feedback.reportError(traceback.format_exc())
 
     def _extract_output_path(self, dest_id):
-        import re
-
         dest_str = dest_id or ""
         output_path = dest_str.split("|", 1)[0] if "|" in dest_str else dest_str
 
@@ -249,114 +248,112 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         has_prefecture=False,
         pref_idx=None,
     ):
-        try:
-            import os
+        resolved = self._resolve_layer_url_and_meta(url, feedback)
+        if not resolved:
+            return None
+        layer_url, service_meta, layer_meta = resolved
 
-            resolved = self._resolve_layer_url_and_meta(url, feedback)
-            if not resolved:
-                return None
-            layer_url, service_meta, layer_meta = resolved
+        vector_layer = self._create_arcgis_vector_layer(layer_url, "temp", feedback)
+        if vector_layer is None:
+            return None
 
-            vector_layer = self._create_arcgis_vector_layer(layer_url, "temp", feedback)
-            if vector_layer is None:
-                return None
+        self._set_vector_layer_crs(
+            vector_layer,
+            service_meta,
+            layer_meta,
+            feedback,
+        )
 
-            self._set_vector_layer_crs(
-                vector_layer,
-                service_meta,
-                layer_meta,
-                feedback,
-            )
+        cleaned_fields = QgsFields()
+        for field in vector_layer.fields():
+            new_field = QgsField(field)
+            new_field.setAlias("")
+            new_field.setComment("")
+            cleaned_fields.append(new_field)
 
-            cleaned_fields = QgsFields()
-            for field in vector_layer.fields():
-                new_field = QgsField(field)
-                new_field.setAlias("")
-                new_field.setComment("")
-                cleaned_fields.append(new_field)
+        final_output_crs = vector_layer.crs()
 
-            final_output_crs = vector_layer.crs()
+        (sink, dest_id) = self.parameterAsSink(
+            parameters,
+            self.OUTPUT,
+            context,
+            cleaned_fields,
+            vector_layer.wkbType(),
+            final_output_crs,
+            QgsFeatureSink.SinkFlags(),
+        )
 
-            (sink, dest_id) = self.parameterAsSink(
-                parameters,
-                self.OUTPUT,
-                context,
-                cleaned_fields,
-                vector_layer.wkbType(),
-                final_output_crs,
-                QgsFeatureSink.SinkFlags(),
-            )
+        if sink is None:
+            feedback.reportError(self.tr("出力レイヤの作成に失敗しました"))
+            return None
 
-            if sink is None:
-                feedback.reportError(self.tr("出力レイヤの作成に失敗しました"))
-                return None
+        feedback.pushInfo(
+            f"Output CRS: {final_output_crs.authid() if final_output_crs.isValid() else 'Unknown'}"
+        )
 
+        total = vector_layer.featureCount()
+        feedback.pushInfo(f"Writing {total} features to output...")
+
+        processed = 0
+        needs_transform = final_output_crs.isValid() and (
+            final_output_crs.authid() != vector_layer.crs().authid()
+        )
+        if needs_transform:
             feedback.pushInfo(
-                f"Output CRS: {final_output_crs.authid() if final_output_crs.isValid() else 'Unknown'}"
+                f"Reprojecting on save: {vector_layer.crs().authid()} → {final_output_crs.authid()}"
             )
-
-            total = vector_layer.featureCount()
-            feedback.pushInfo(f"Writing {total} features to output...")
-
-            processed = 0
-            needs_transform = final_output_crs.isValid() and (
-                final_output_crs.authid() != vector_layer.crs().authid()
+            transform = QgsCoordinateTransform(
+                vector_layer.crs(),
+                final_output_crs,
+                QgsProject.instance().transformContext(),
             )
-            if needs_transform:
-                feedback.pushInfo(
-                    f"Reprojecting on save: {vector_layer.crs().authid()} → {final_output_crs.authid()}"
-                )
-                transform = QgsCoordinateTransform(
-                    vector_layer.crs(),
-                    final_output_crs,
-                    QgsProject.instance().transformContext(),
-                )
+        else:
+            transform = None
+
+        for feature in vector_layer.getFeatures():
+            if feedback.isCanceled():
+                break
+            new_f = QgsFeature(feature)
+            if transform and new_f.hasGeometry():
+                try:
+                    geom = new_f.geometry()
+                    if not geom.isEmpty():
+                        geom.transform(transform)
+                        new_f.setGeometry(geom)
+                except Exception as e:
+                    feedback.pushInfo(
+                        f"Skipping feature due to transform error: {str(e)}"
+                    )
+                    continue
+            sink.addFeature(new_f, QgsFeatureSink.FastInsert)
+            processed += 1
+            if total > 0:
+                feedback.setProgress(int((processed / total) * 100))
+
+        feedback.pushInfo(f"Successfully wrote {processed} features")
+
+        del sink
+
+        output_path = self._extract_output_path(dest_id)
+
+        if output_path and output_path not in ("memory:", ""):
+            base, _ = os.path.splitext(output_path)
+            qml_path = base + ".qml"
+            res, err = vector_layer.saveNamedStyle(qml_path)
+            if res:
+                feedback.pushInfo(f"Saved style file: {qml_path}")
             else:
-                transform = None
+                feedback.reportError(f"Failed to save style to {qml_path}: {err}")
 
-            for feature in vector_layer.getFeatures():
-                if feedback.isCanceled():
-                    break
-                new_f = QgsFeature(feature)
-                if transform and new_f.hasGeometry():
-                    try:
-                        geom = new_f.geometry()
-                        if not geom.isEmpty():
-                            geom.transform(transform)
-                            new_f.setGeometry(geom)
-                    except Exception as e:
-                        feedback.pushInfo(
-                            f"Skipping feature due to transform error: {str(e)}"
-                        )
-                        continue
-                sink.addFeature(new_f, QgsFeatureSink.FastInsert)
-                processed += 1
-                if total > 0:
-                    feedback.setProgress(int((processed / total) * 100))
+            # Load the saved layer and add it to the project with style
+            layer_name = (
+                self._build_layer_name(dataset, has_prefecture, pref_idx)
+                if dataset
+                else "MOE Layer"
+            )
 
-            feedback.pushInfo(f"Successfully wrote {processed} features")
-
-            del sink
-
-            output_path = self._extract_output_path(dest_id)
-
-            if output_path and output_path not in ("memory:", ""):
-                base, _ = os.path.splitext(output_path)
-                qml_path = base + ".qml"
-                res, err = vector_layer.saveNamedStyle(qml_path)
-                if res:
-                    feedback.pushInfo(f"Saved style file: {qml_path}")
-                else:
-                    feedback.reportError(f"Failed to save style to {qml_path}: {err}")
-
-                # Load the saved layer and add it to the project with style
-                layer_name = (
-                    self._build_layer_name(dataset, has_prefecture, pref_idx)
-                    if dataset
-                    else "MOE Layer"
-                )
+            try:
                 saved_layer = QgsVectorLayer(output_path, layer_name, "ogr")
-
                 if saved_layer.isValid():
                     QgsProject.instance().addMapLayer(saved_layer)
                     feedback.pushInfo(f"Added layer to project: {layer_name}")
@@ -368,44 +365,41 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                     )
                 else:
                     feedback.reportError(f"Could not load saved layer: {output_path}")
-            else:
-                feedback.pushInfo(
-                    "Could not determine output file path; skipped writing .qml style."
-                )
+            except Exception as e:
+                self._report_exception(feedback, "Error loading saved layer", e)
+        else:
+            feedback.pushInfo(
+                "Could not determine output file path; skipped writing .qml style."
+            )
 
-            return dest_id
-
-        except Exception as e:
-            self._report_exception(feedback, "Error saving layer", e)
-            return None
+        return dest_id
 
     def _crs_from_esri_spatial_ref(self, spatial_ref, feedback):
         if not spatial_ref:
             return None
 
-        try:
-            wkid = spatial_ref.get("latestWkid") or spatial_ref.get("wkid")
-
+        wkid = spatial_ref.get("latestWkid") or spatial_ref.get("wkid")
+        if wkid is not None:
             esri_to_epsg = {
                 102100: 3857,
                 102113: 3857,
             }
-            if wkid in esri_to_epsg:
-                wkid = esri_to_epsg[wkid]
+            wkid = esri_to_epsg.get(wkid, wkid)
 
-            if wkid:
-                wkid_int = int(wkid)
-                crs = QgsCoordinateReferenceSystem.fromEpsgId(wkid_int)
-                if crs.isValid():
-                    return crs
+            if wkid is not None:
+                try:
+                    wkid_int = int(wkid)
+                    crs = QgsCoordinateReferenceSystem.fromEpsgId(wkid_int)
+                    if crs.isValid():
+                        return crs
+                except (ValueError, TypeError) as e:
+                    feedback.reportError(f"Invalid WKID format: {wkid} - {str(e)}")
 
-            wkt = spatial_ref.get("wkt") or spatial_ref.get("latestWkt")
-            if wkt:
-                crs = QgsCoordinateReferenceSystem()
-                if crs.createFromWkt(wkt):
-                    return crs
-        except Exception as e:
-            feedback.reportError(f"CRS parse error: {str(e)}")
+        wkt = spatial_ref.get("wkt") or spatial_ref.get("latestWkt")
+        if wkt:
+            crs = QgsCoordinateReferenceSystem()
+            if crs.createFromWkt(wkt):
+                return crs
 
         return None
 

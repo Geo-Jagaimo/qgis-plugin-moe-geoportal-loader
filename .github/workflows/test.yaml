@@ -15,11 +15,16 @@ jobs:
 
     strategy:
       matrix:
-        docker_tags: [release-3_34, latest]
+        docker_tags: [release-3_34]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Export requirements.txt
+        run: |
+          pip3 install uv
+          uv export -o requirements.txt --no-dev --no-hashes
 
       - name: Docker pull and create qgis-testing-environment
         run: |
@@ -31,11 +36,6 @@ jobs:
           docker exec qgis-testing-environment sh -c "qgis_setup.sh plugin_dir"
           docker exec qgis-testing-environment sh -c "rm -f /root/.local/share/QGIS/QGIS3/profiles/default/python/plugins/plugin_dir"
           docker exec qgis-testing-environment sh -c "ln -s /tests_directory/plugin_dir /root/.local/share/QGIS/QGIS3/profiles/default/python/plugins/plugin_dir"
-
-      - name: Start Xvfb
-        run: |
-          docker exec -d qgis-testing-environment sh -c "Xvfb :99 -screen 0 1024x768x24 -nolisten tcp &"
-          sleep 3
 
       - name: Docker run plugin tests
         run: |

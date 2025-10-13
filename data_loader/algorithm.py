@@ -1,3 +1,4 @@
+import traceback
 from pathlib import Path
 
 from qgis.core import (
@@ -192,6 +193,23 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         else:
             feedback.pushInfo(f"Layer CRS: {vector_layer.crs().authid()}")
 
+    def _report_exception(self, feedback, message, exception):
+        feedback.reportError(f"{message}: {str(exception)}")
+        feedback.reportError(traceback.format_exc())
+
+    def _extract_output_path(self, dest_id):
+        import re
+
+        dest_str = dest_id or ""
+        output_path = dest_str.split("|", 1)[0] if "|" in dest_str else dest_str
+
+        if output_path and output_path.startswith("ogr:"):
+            m = re.search(r"dbname='?([^' ]+)'?", output_path)
+            if m:
+                output_path = m.group(1)
+
+        return output_path
+
     def _load_as_arcgis_layer(self, url, dataset, has_prefecture, pref_idx, feedback):
         try:
             resolved = self._resolve_layer_url_and_meta(url, feedback)
@@ -212,18 +230,13 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 layer_meta,
                 feedback,
             )
-            project = QgsProject.instance()
-            project.setCrs(project.crs())
 
             QgsProject.instance().addMapLayer(vector_layer)
             feedback.pushInfo(f"Successfully loaded layer: {layer_name}")
             return vector_layer.id()
 
         except Exception as e:
-            feedback.reportError(f"Error loading layer: {str(e)}")
-            import traceback
-
-            feedback.reportError(traceback.format_exc())
+            self._report_exception(feedback, "Error loading layer", e)
             return None
 
     def _save_to_file(
@@ -238,7 +251,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
     ):
         try:
             import os
-            import re
 
             resolved = self._resolve_layer_url_and_meta(url, feedback)
             if not resolved:
@@ -326,13 +338,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
             del sink
 
-            dest_str = dest_id or ""
-            output_path = dest_str.split("|", 1)[0] if "|" in dest_str else dest_str
-
-            if output_path and output_path.startswith("ogr:"):
-                m = re.search(r"dbname='?([^' ]+)'?", output_path)
-                if m:
-                    output_path = m.group(1)
+            output_path = self._extract_output_path(dest_id)
 
             if output_path and output_path not in ("memory:", ""):
                 base, _ = os.path.splitext(output_path)
@@ -352,10 +358,8 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 saved_layer = QgsVectorLayer(output_path, layer_name, "ogr")
 
                 if saved_layer.isValid():
-                    # QML will be automatically loaded by QGIS from the .qml file
                     QgsProject.instance().addMapLayer(saved_layer)
                     feedback.pushInfo(f"Added layer to project: {layer_name}")
-                    # Store the layer for context
                     context.addLayerToLoadOnCompletion(
                         saved_layer.id(),
                         QgsProcessingContext.LayerDetails(
@@ -372,10 +376,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             return dest_id
 
         except Exception as e:
-            feedback.reportError(f"Error saving layer: {str(e)}")
-            import traceback
-
-            feedback.reportError(traceback.format_exc())
+            self._report_exception(feedback, "Error saving layer", e)
             return None
 
     def _crs_from_esri_spatial_ref(self, spatial_ref, feedback):

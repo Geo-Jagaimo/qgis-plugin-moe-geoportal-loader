@@ -2,7 +2,7 @@
 name=MOE Geoportal Loader
 qgisMinimumVersion=3.40
 about=環境省が提供する地理空間情報ポータルサイト「環境ジオポータル」のデータをQGISに直接読み込むためのプラグイン
-description=プルダウンから読み込みたいデータセットを選択し、実行するとスタイル付きのレイヤを読み込むことができます。必要に応じて、ファイルに保存することもできます（同時に、スタイルも保存されます）。
+description=データセットと出力先を選択すると、ファイルとスタイル設定が自動的に保存されます。必要に応じて、ArcGIS Feature Serviceレイヤとして読み込むことができます。
 version={{PLUGIN_VERSION}}
 
 supportsQt6=True

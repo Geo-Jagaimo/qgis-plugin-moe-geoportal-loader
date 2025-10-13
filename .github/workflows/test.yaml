@@ -4,22 +4,52 @@ on:
   pull_request:
     branches:
       - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
 env:
-  # Docker settings
   DOCKER_IMAGE: qgis/qgis
 
 jobs:
-  Test-plugin:
+  unit-tests:
     runs-on: ubuntu-latest
 
     strategy:
       matrix:
-        docker_tags: [release-3_28, release-3_34]
+        python-version: ["3.9", "3.10"]
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Validate sources
+        run: python -m compileall plugin.py data_loader
+
+      - name: Run unit tests
+        run: python -m unittest discover -s test -p "test_*.py"
+
+  qgis-integration:
+    needs: unit-tests
+    if: >
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-qgis-tests'))
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        docker_tags: [release-3_34]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Export requirements.txt
         run: |
@@ -38,6 +68,15 @@ jobs:
           docker exec qgis-testing-environment sh -c "ln -s /tests_directory/plugin_dir /root/.local/share/QGIS/QGIS3/profiles/default/python/plugins/plugin_dir"
           docker exec qgis-testing-environment sh -c "pip3 install -r /tests_directory/plugin_dir/requirements.txt"
 
+      - name: Start Xvfb
+        run: |
+          docker exec -d qgis-testing-environment sh -c "nohup Xvfb :99 -screen 0 1024x768x24 -nolisten tcp > /dev/null 2>&1 &"
+          sleep 3
+
       - name: Docker run plugin tests
         run: |
-          docker exec qgis-testing-environment sh -c "qgis_testrunner.sh plugin_dir.test_suite.test_package"
+          docker exec qgis-testing-environment sh -c "qgis_testrunner.sh plugin_dir.test.test_suite.test_package"
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f qgis-testing-environment

@@ -1,3 +1,4 @@
+import os
 import sys
 import unittest
 
@@ -5,7 +6,9 @@ import unittest
 def test_package():
     """Return a test suite for the plugin."""
     test_loader = unittest.TestLoader()
-    test_suite = test_loader.discover("test", pattern="test_*.py")
+    # Get the directory where this file is located
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    test_suite = test_loader.discover(test_dir, pattern="test_*.py")
     return test_suite
 
 

@@ -433,8 +433,8 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
     def shortHelpString(self):
         return self.tr(
             "環境省が提供する地理空間情報ポータルサイト「環境ジオポータル」のデータをQGISに直接読み込むためのプラグインです。\n"
-            "データセットを選択すると、ArcGIS Feature Serviceレイヤとして、設定されたスタイル付きで読み込まれます。\n"
-            "必要に応じてファイル保存も同時に行うことができ、保存時にはスタイルも自動的に保存されます。"
+            "データセットと出力先を選択すると、ファイルとスタイル設定が自動的に保存されます。\n"
+            "必要に応じて、ArcGIS Feature Serviceレイヤとして読み込むことができます。"
         )
 
     def name(self):

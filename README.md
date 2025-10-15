@@ -3,13 +3,16 @@
 ## 概要
 
 - 環境省が運営する地理空間情報ポータルサイト「[環境ジオポータル](https://geoportal.env.go.jp)」で公開されているデータのうち、タイプが「Feature Service」で、ライセンスが「CC BY 4.0」のものを QGIS に直接読み込めるプラグインです。
+- [QGIS Pyton Plugins Repository](https://plugins.qgis.org/plugins/moe_geoportal_loader)に登録されているため、QGIS プラグインマネージャから直接インストールするできます。
 
 ## インストール
 
-- [Releases](https://github.com/Geo-Jagaimo/qgis-plugin-moe-geoportal-loader/releases) ページから最新の「moe-geoportal-loader」パッケージをダウンロードします。
-- QGIS の［プラグインの管理とインストール...］で［ZIP からインストール］を選択し、ダウンロードした ZIP ファイルを解凍せずにそのまま指定してインストールしてください。
+- QGIS を起動し、メニューバーより［プラグイン］→［プラグインの管理とインストール...］の順にクリックします。
+- プラグインマネージャが起動するため、［全プラグイン］タブで「moe」と検索します。
+- 「MOE Geoportal Loader」を選択し、［インストール］ボタンよりインストールできます。
+- インストールが完了したら、［インストール済み］タブで「MOE Geoportal Loader」にチェックが入っていることを確認し、プラグインマネージャを閉じます。
 
-<img src='./imgs/install_from_zip.png' alt="ZIPからインストール" width="70%">
+<img src='./imgs/install.png' alt="ZIPからインストール" width="70%">
 
 ## 使用方法
 

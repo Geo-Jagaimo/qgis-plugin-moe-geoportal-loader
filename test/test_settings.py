@@ -1,7 +1,7 @@
 import unittest
 
-from data_loader.settings_datasets import DATASETS
-from data_loader.settings_prefecture import PREFECTURES
+from data_loader.datasets.prefecture import PREFECTURES
+from data_loader.datasets.settings_datasets import DATASETS
 
 
 class TestSettings(unittest.TestCase):

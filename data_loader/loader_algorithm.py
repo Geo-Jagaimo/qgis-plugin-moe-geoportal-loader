@@ -22,8 +22,8 @@ from qgis.core import (
 )
 from qgis.PyQt.QtCore import QCoreApplication, QUrl
 
-from .settings_datasets import DATASETS
-from .settings_prefecture import PREFECTURES
+from .datasets.prefecture import PREFECTURES
+from .datasets.settings_datasets import DATASETS
 
 
 class MOELoaderAlgorithm(QgsProcessingAlgorithm):

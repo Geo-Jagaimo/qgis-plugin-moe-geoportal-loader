@@ -4,7 +4,7 @@ from qgis.core import QgsApplication
 from qgis.gui import QgisInterface
 from qgis.PyQt.QtWidgets import QAction, QToolButton
 
-from .data_loader.provider import MOELoaderProvider
+from .data_loader.loader_provider import MOELoaderProvider
 
 with contextlib.suppress(ImportError):
     from processing import execAlgorithmDialog

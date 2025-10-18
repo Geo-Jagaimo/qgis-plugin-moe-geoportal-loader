@@ -3,7 +3,7 @@ from pathlib import Path
 from qgis.core import QgsProcessingProvider
 from qgis.PyQt.QtGui import QIcon
 
-from .algorithm import MOELoaderAlgorithm
+from .loader_algorithm import MOELoaderAlgorithm
 
 
 class MOELoaderProvider(QgsProcessingProvider):

@@ -1,69 +1,7 @@
-DATASETS = {
-    "vg_50000": {
-        "name": "現存植生図（1/50,000）- 都道府県別",
-        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/vg_{pref_code}/FeatureServer",
-        "has_prefecture": True,
-    },
-    "vgsk_50000": {
-        "name": "自然度区分図（1/50,000）- 都道府県別",
-        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/vgsk_{pref_code}/FeatureServer",
-        "has_prefecture": True,
-    },
-    "veg2024bk1": {
-        "name": "現存植生図2024 北海道ブロック",
-        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/veg2024bk1/FeatureServer",
-        "has_prefecture": False,
-    },
-    "veg2024bk2": {
-        "name": "現存植生図2024 東北ブロック",
-        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/veg2024bk2/FeatureServer",
-        "has_prefecture": False,
-    },
-    "veg2024bk3": {
-        "name": "現存植生図2024 関東ブロック",
-        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/veg2024bk3/FeatureServer",
-        "has_prefecture": False,
-    },
-    "veg2024bk4": {
-        "name": "現存植生図2024 北陸ブロック",
-        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/veg2024bk4/FeatureServer",
-        "has_prefecture": False,
-    },
-    "veg2024bk5": {
-        "name": "現存植生図2024 中部ブロック",
-        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/veg2024bk5/FeatureServer",
-        "has_prefecture": False,
-    },
-    "veg2024bk6": {
-        "name": "現存植生図2024 近畿ブロック",
-        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/veg2024bk6/FeatureServer",
-        "has_prefecture": False,
-    },
-    "veg2024bk7": {
-        "name": "現存植生図2024 中四国ブロック",
-        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/veg2024bk7/FeatureServer",
-        "has_prefecture": False,
-    },
-    "veg2024bk8": {
-        "name": "現存植生図2024 九州沖縄ブロック",
-        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/veg2024bk8/FeatureServer",
-        "has_prefecture": False,
-    },
-    "anaguma": {
-        "name": "中大型哺乳類分布調査（アナグマ）",
-        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/anaguma/FeatureServer",
-        "has_prefecture": False,
-    },
-    "kitune": {
-        "name": "中大型哺乳類分布調査（キツネ）",
-        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/kitune/FeatureServer",
-        "has_prefecture": False,
-    },
-    "tanuki": {
-        "name": "中大型哺乳類分布調査（タヌキ）",
-        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/tanuki/FeatureServer",
-        "has_prefecture": False,
-    },
+"""サンゴ礁調査データセット定義"""
+
+CORAL_DATASETS = {
+    # サンゴ浅海生態系現況把握調査
     "tokara_21_code1": {
         "name": "サンゴ浅海生態系現況把握調査（トカラ列島周辺2021, CODE1）",
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/tokara_2021_code1/FeatureServer",
@@ -139,6 +77,7 @@ DATASETS = {
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/sekiseishoko_2017/FeatureServer",
         "has_prefecture": False,
     },
+    # サンゴ礁調査（第4回・第5回）
     "sb4_v2": {
         "name": "サンゴ第４回（1988-1993）サンゴ礁地域分布地域",
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/sb4_v2/FeatureServer",
@@ -159,11 +98,7 @@ DATASETS = {
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/sa5/FeatureServer",
         "has_prefecture": False,
     },
-    "NtVeg2024": {
-        "name": "北方領土植生概況図",
-        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/NtVeg2024/FeatureServer",
-        "has_prefecture": False,
-    },
+    # 変化 union データ
     "amamiooshima_H20andR01Coralmap": {
         "name": "変化 union 奄美大島 H20andR01Coralmap",
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_union_amamiooshima_H20andR01Coralmap/FeatureServer",
@@ -194,6 +129,7 @@ DATASETS = {
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_union_tokunoshima_5thandR01Coralmap/FeatureServer",
         "has_prefecture": False,
     },
+    # 変化域データ
     "kume_H20vsH30corlalmap": {
         "name": "変化域 kume H20vsH30corlalmap",
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_kume_H20vsH30corlalmap/FeatureServer",
@@ -282,41 +218,6 @@ DATASETS = {
     "tanegashima_yakushima_5thvsR03corlalmap": {
         "name": "変化域 種子島 屋久島 第5回vsR03corlalmap",
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/change_tanegashima_yakushima_5thvsR03corlalmap/FeatureServer",
-        "has_prefecture": False,
-    },
-    "mo4_v2": {
-        "name": "藻場調査第４回（1988-1993）",
-        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/mo4_v2/FeatureServer",
-        "has_prefecture": False,
-    },
-    "mo5_v5": {
-        "name": "藻場調査第５回（1993-1999）",
-        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/mo5_v5/FeatureServer",
-        "has_prefecture": False,
-    },
-    "UTM51_NEW": {
-        "name": "藻場調査（2018-2020、UTM51の範囲）",
-        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/UTM51_NEW/FeatureServer",
-        "has_prefecture": False,
-    },
-    "UTM52_NEW": {
-        "name": "藻場調査（2018-2020、UTM52の範囲）",
-        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/UTM52_NEW/FeatureServer",
-        "has_prefecture": False,
-    },
-    "UTM53_NEW": {
-        "name": "藻場調査（2018-2020、UTM53の範囲）",
-        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/UTM53_NEW/FeatureServer",
-        "has_prefecture": False,
-    },
-    "UTM54_NEW": {
-        "name": "藻場調査（2018-2020、UTM54の範囲）",
-        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/UTM54_NEW/FeatureServer",
-        "has_prefecture": False,
-    },
-    "UTM55_NEW": {
-        "name": "藻場調査（2018-2020、UTM55の範囲）",
-        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/UTM55_NEW/FeatureServer",
         "has_prefecture": False,
     },
 }

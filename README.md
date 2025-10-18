@@ -3,7 +3,7 @@
 ## 概要
 
 - 環境省が運営する地理空間情報ポータルサイト「[環境ジオポータル](https://geoportal.env.go.jp)」で公開されているデータのうち、タイプが「Feature Service」で、ライセンスが「CC BY 4.0」のものを QGIS に直接読み込めるプラグインです。
-- [QGIS Pyton Plugins Repository](https://plugins.qgis.org/plugins/moe_geoportal_loader)に登録されているため、QGIS プラグインマネージャから直接インストールするできます。
+- [QGIS Pyton Plugins Repository](https://plugins.qgis.org/plugins/moe_geoportal_loader)に登録されているため、QGIS プラグインマネージャから直接インストールできます。
 
 ## インストール
 

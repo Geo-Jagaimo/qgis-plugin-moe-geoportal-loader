@@ -11,7 +11,7 @@ hasProcessingProvider=yes
 #Plugin main icon
 icon=imgs/icon.png
 
-author=Keita Uemori
+author=geojagaimo
 email=geo.jagaimo@gmail.com
 homepage=https://github.com/Geo-Jagaimo/qgis-plugin-moe-geoportal-loader
 tracker=https://github.com/Geo-Jagaimo/qgis-plugin-moe-geoportal-loader/issues

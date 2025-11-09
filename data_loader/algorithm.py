@@ -22,32 +22,22 @@ from qgis.core import (
 )
 from qgis.PyQt.QtCore import QCoreApplication, QUrl
 
-from .datasets.prefecture import PREFECTURES
+from .settings_datasets import DATASETS
+from .settings_prefecture import PREFECTURES
 
 
-class MOELoaderAlgorithmBase(QgsProcessingAlgorithm):
+class MOELoaderAlgorithm(QgsProcessingAlgorithm):
     DATASET = "DATASET"
     CATEGORY = "CATEGORY"
     PREFECTURE = "PREFECTURE"
     ADD_AS_ARCGIS_LAYER = "ADD_AS_ARCGIS_LAYER"
     OUTPUT = "OUTPUT"
 
-    def __init__(self):
-        super().__init__()
-        self._datasets = {}
-
-    def get_datasets(self):
-        raise NotImplementedError("Subclasses must implement get_datasets()")
-
-    def has_prefecture_parameter(self):
-        return False
-
     def initAlgorithm(self, config=None):
-        self._datasets = self.get_datasets()
         self._dataset_mapping = []
         dataset_options = []
 
-        for dataset_key, dataset in self._datasets.items():
+        for dataset_key, dataset in DATASETS.items():
             self._dataset_mapping.append(
                 (
                     dataset_key,
@@ -65,17 +55,15 @@ class MOELoaderAlgorithmBase(QgsProcessingAlgorithm):
             )
         )
 
-        # Add prefecture parameter only when required
-        if self.has_prefecture_parameter():
-            prefecture_names = [name for name in PREFECTURES.values()]
-            self.addParameter(
-                QgsProcessingParameterEnum(
-                    self.PREFECTURE,
-                    self.tr("都道府県"),
-                    options=prefecture_names,
-                    defaultValue=0,
-                )
+        prefecture_names = [name for name in PREFECTURES.values()]
+        self.addParameter(
+            QgsProcessingParameterEnum(
+                self.PREFECTURE,
+                self.tr("都道府県"),
+                options=prefecture_names,
+                defaultValue=0,
             )
+        )
 
         self.addParameter(
             QgsProcessingParameterBoolean(
@@ -97,7 +85,7 @@ class MOELoaderAlgorithmBase(QgsProcessingAlgorithm):
         dataset_idx = self.parameterAsEnum(parameters, self.CATEGORY, context)
         dataset_key, has_prefecture = self._dataset_mapping[dataset_idx]
 
-        dataset = self._datasets[dataset_key]
+        dataset = DATASETS[dataset_key]
         url = dataset["url"]
 
         if has_prefecture:
@@ -442,18 +430,18 @@ class MOELoaderAlgorithmBase(QgsProcessingAlgorithm):
                     feedback.pushInfo(f"Failed to apply QML style: {err}")
                 break
 
-    def tr(self, string):
-        return QCoreApplication.translate("Processing", string)
+    def shortHelpString(self):
+        return self.tr(
+            "環境省が提供する地理空間情報ポータルサイト「環境ジオポータル」のデータをQGISに直接読み込むためのプラグインです。\n"
+            "データセットと出力先を選択すると、ファイルとスタイル設定が自動的に保存されます。\n"
+            "必要に応じて、ArcGIS Feature Serviceレイヤとして読み込むことができます。"
+        )
 
-    # 以下のメソッドはサブクラスでオーバーライド
     def name(self):
-        raise NotImplementedError("Subclasses must implement name()")
+        return "moe_geoportal_loader"
 
     def displayName(self):
-        raise NotImplementedError("Subclasses must implement displayName()")
-
-    def shortHelpString(self):
-        raise NotImplementedError("Subclasses must implement shortHelpString()")
+        return self.tr("環境ジオポータルのデータを読み込む")
 
     def group(self):
         return None
@@ -461,5 +449,8 @@ class MOELoaderAlgorithmBase(QgsProcessingAlgorithm):
     def groupId(self):
         return None
 
+    def tr(self, string):
+        return QCoreApplication.translate("Processing", string)
+
     def createInstance(self):
-        raise NotImplementedError("Subclasses must implement createInstance()")
+        return MOELoaderAlgorithm()

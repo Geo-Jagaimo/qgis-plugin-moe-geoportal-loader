@@ -3,18 +3,12 @@ from pathlib import Path
 from qgis.core import QgsProcessingProvider
 from qgis.PyQt.QtGui import QIcon
 
-from .loader_coral import CoralLoaderAlgorithm
-from .loader_mammal import MammalLoaderAlgorithm
-from .loader_seagrass import SeagrassLoaderAlgorithm
-from .loader_vegetation import VegetationLoaderAlgorithm
+from .algorithm import MOELoaderAlgorithm
 
 
 class MOELoaderProvider(QgsProcessingProvider):
     def loadAlgorithms(self, *args, **kwargs):
-        self.addAlgorithm(VegetationLoaderAlgorithm())
-        self.addAlgorithm(CoralLoaderAlgorithm())
-        self.addAlgorithm(MammalLoaderAlgorithm())
-        self.addAlgorithm(SeagrassLoaderAlgorithm())
+        self.addAlgorithm(MOELoaderAlgorithm())
 
     def id(self, *args, **kwargs):
         return "moe"

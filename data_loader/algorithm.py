@@ -336,7 +336,13 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
         output_path = self._extract_output_path(dest_id)
 
-        if output_path and output_path not in ("memory:", ""):
+        # Build layer name
+        layer_name = self._build_layer_name(dataset, has_prefecture, pref_idx)
+
+        # Check if this is a real file path (absolute path)
+        is_file_output = output_path and os.path.isabs(output_path)
+
+        if is_file_output:
             base, _ = os.path.splitext(output_path)
             qml_path = base + ".qml"
             res, err = vector_layer.saveNamedStyle(qml_path)
@@ -346,12 +352,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 feedback.reportError(f"Failed to save style to {qml_path}: {err}")
 
             # Load the saved layer and add it to the project with style
-            layer_name = (
-                self._build_layer_name(dataset, has_prefecture, pref_idx)
-                if dataset
-                else "MOE Layer"
-            )
-
             try:
                 saved_layer = QgsVectorLayer(output_path, layer_name, "ogr")
                 if saved_layer.isValid():
@@ -368,8 +368,13 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             except Exception as e:
                 self._report_exception(feedback, "Error loading saved layer", e)
         else:
-            feedback.pushInfo(
-                "Could not determine output file path; skipped writing .qml style."
+            # For memory layers or when output path is not determined
+            feedback.pushInfo(f"Setting layer name to: {layer_name}")
+            context.addLayerToLoadOnCompletion(
+                dest_id,
+                QgsProcessingContext.LayerDetails(
+                    layer_name, QgsProject.instance(), self.OUTPUT
+                ),
             )
 
         return dest_id

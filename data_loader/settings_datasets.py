@@ -64,6 +64,11 @@ DATASETS = {
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/tanuki/FeatureServer",
         "has_prefecture": False,
     },
+    "kiso2nd_bear5k": {
+        "name": "基礎調査1980 クマ類全国分布メッシュ",
+        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/kiso2nd_bear5k/FeatureServer",
+        "has_prefecture": False,
+    },
     "tokara_21_code1": {
         "name": "サンゴ浅海生態系現況把握調査（トカラ列島周辺2021, CODE1）",
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/tokara_2021_code1/FeatureServer",

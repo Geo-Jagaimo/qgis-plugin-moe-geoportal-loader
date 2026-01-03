@@ -15,6 +15,7 @@ from qgis.core import (
     QgsProcessingAlgorithm,
     QgsProcessingContext,
     QgsProcessingParameterBoolean,
+    QgsProcessingParameterCrs,
     QgsProcessingParameterEnum,
     QgsProcessingParameterFeatureSink,
     QgsProject,
@@ -30,6 +31,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
     DATASET = "DATASET"
     CATEGORY = "CATEGORY"
     PREFECTURE = "PREFECTURE"
+    CRS = "CRS"
     ADD_AS_ARCGIS_LAYER = "ADD_AS_ARCGIS_LAYER"
     OUTPUT = "OUTPUT"
 
@@ -66,9 +68,16 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         )
 
         self.addParameter(
+            QgsProcessingParameterCrs(
+                self.CRS, self.tr("出力レイヤのCRS"), optional=True, defaultValue=None
+            )
+        )
+
+        self.addParameter(
             QgsProcessingParameterBoolean(
                 self.ADD_AS_ARCGIS_LAYER,
                 self.tr("ArcGIS REST Server layerとして追加"),
+                optional=True,
                 defaultValue=False,
             )
         )

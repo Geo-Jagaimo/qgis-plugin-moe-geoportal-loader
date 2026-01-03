@@ -123,6 +123,8 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 dataset,
                 has_prefecture,
                 pref_idx if has_prefecture else None,
+                parameters,
+                context,
                 feedback,
             )
             return {"OUTPUT": layer_id}
@@ -190,18 +192,33 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             return None
         return vector_layer
 
-    def _set_vector_layer_crs(self, vector_layer, service_meta, layer_meta, feedback):
+    def _set_vector_layer_crs(
+        self, vector_layer, service_meta, layer_meta, parameters, context, feedback
+    ):
         spatial_ref = (
             (layer_meta.get("extent") or {}).get("spatialReference")
             or layer_meta.get("spatialReference")
             or service_meta.get("spatialReference", {})
         )
-        layer_crs = self._crs_from_esri_spatial_ref(spatial_ref, feedback)
-        if layer_crs and layer_crs.isValid():
-            vector_layer.setCrs(layer_crs)
-            feedback.pushInfo(f"Layer CRS set to: {layer_crs.authid()}")
+
+        esri_crs = self._crs_from_esri_spatial_ref(spatial_ref, feedback)
+
+        # Prioritize the CRS specified by the user
+        param_crs = self.parameterAsCrs(parameters, self.CRS, context)
+
+        if param_crs and param_crs.isValid():
+            layer_crs = param_crs
+            feedback.pushInfo(f"Using user-specified CRS: {layer_crs.authid()}")
+        elif esri_crs and esri_crs.isValid():
+            layer_crs = esri_crs
+            feedback.pushInfo(f"Using ESRI-defined CRS: {layer_crs.authid()}")
         else:
-            feedback.pushInfo(f"Layer CRS: {vector_layer.crs().authid()}")
+            feedback.pushInfo(
+                f"No valid CRS found, using layer default: {vector_layer.crs().authid()}"
+            )
+            return
+
+        vector_layer.setCrs(layer_crs)
 
     def _report_exception(self, feedback, message, exception):
         feedback.reportError(f"{message}: {str(exception)}")
@@ -218,7 +235,9 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
         return output_path
 
-    def _load_as_arcgis_layer(self, url, dataset, has_prefecture, pref_idx, feedback):
+    def _load_as_arcgis_layer(
+        self, url, dataset, has_prefecture, pref_idx, parameters, context, feedback
+    ):
         try:
             resolved = self._resolve_layer_url_and_meta(url, feedback)
             if not resolved:
@@ -236,6 +255,8 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 vector_layer,
                 service_meta,
                 layer_meta,
+                parameters,
+                context,
                 feedback,
             )
 
@@ -270,6 +291,8 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             vector_layer,
             service_meta,
             layer_meta,
+            parameters,
+            context,
             feedback,
         )
 

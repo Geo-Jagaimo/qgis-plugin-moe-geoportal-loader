@@ -51,7 +51,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterEnum(
                 self.CATEGORY,
-                self.tr("データセット"),
+                self.tr("Dataset"),
                 options=dataset_options,
                 defaultValue=0,
             )
@@ -61,7 +61,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterEnum(
                 self.PREFECTURE,
-                self.tr("都道府県"),
+                self.tr("Prefectures"),
                 options=prefecture_names,
                 defaultValue=0,
             )
@@ -69,14 +69,17 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
         self.addParameter(
             QgsProcessingParameterCrs(
-                self.CRS, self.tr("出力レイヤのCRS"), optional=True, defaultValue=None
+                self.CRS,
+                self.tr("Output coordinate system"),
+                optional=True,
+                defaultValue=None,
             )
         )
 
         self.addParameter(
             QgsProcessingParameterBoolean(
                 self.ADD_AS_ARCGIS_LAYER,
-                self.tr("ArcGIS REST Server layerとして追加"),
+                self.tr("Add as ArcGIS REST Server layer"),
                 optional=True,
                 defaultValue=False,
             )
@@ -85,7 +88,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT,
-                self.tr("出力レイヤ"),
+                self.tr("Output layer"),
                 createByDefault=False,
             )
         )
@@ -100,7 +103,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         if has_prefecture:
             pref_idx = self.parameterAsEnum(parameters, self.PREFECTURE, context)
             if pref_idx is None or pref_idx == 0:
-                feedback.reportError(self.tr("都道府県を選択してください"))
+                feedback.reportError(self.tr("Please select a prefecture."))
                 return {"OUTPUT": None}
 
             pref_code = list(PREFECTURES.keys())[pref_idx]
@@ -130,7 +133,9 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             return {"OUTPUT": layer_id}
 
         if not parameters.get(self.OUTPUT):
-            feedback.reportError(self.tr("出力レイヤの保存先を指定してください"))
+            feedback.reportError(
+                self.tr("Please specify the save location for the output layer.")
+            )
             return {"OUTPUT": None}
 
         file_output = self._save_to_file(
@@ -316,7 +321,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         )
 
         if sink is None:
-            feedback.reportError(self.tr("出力レイヤの作成に失敗しました"))
+            feedback.reportError(self.tr("Failed to create output layer."))
             return None
 
         feedback.pushInfo(
@@ -469,16 +474,16 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
     def shortHelpString(self):
         return self.tr(
-            "環境省が提供する地理空間情報ポータルサイト「環境ジオポータル」のデータをQGISに直接読み込むためのプラグインです。\n"
-            "データセットと出力先を選択すると、ファイルとスタイル設定が自動的に保存されます。\n"
-            "必要に応じて、ArcGIS Feature Serviceレイヤとして読み込むことができます。"
+            'This is a plugin to directly load data from the "<a href="https://geoportal.env.go.jp/">Environmental GeoPortal</a>," a geospatial information portal site provided by the Ministry of the Environment, into QGIS. \n'
+            "When you select the dataset and output destination, the file and style settings are automatically saved. \n"
+            "If necessary, it can be loaded as an ArcGIS Feature Service layer."
         )
 
     def name(self):
         return "moe_geoportal_loader"
 
     def displayName(self):
-        return self.tr("環境ジオポータルのデータを読み込む")
+        return self.tr("Load the data from Environmental GeoPortal")
 
     def group(self):
         return None

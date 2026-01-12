@@ -474,8 +474,8 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
     def shortHelpString(self):
         return self.tr(
-            'This is a plugin to directly load data from the "<a href="https://geoportal.env.go.jp/">Environmental GeoPortal</a>," a geospatial information portal site provided by the Ministry of the Environment, into QGIS. \n'
-            "When you select the dataset and output destination, the file and style settings are automatically saved. \n"
+            'This is a plugin to directly load data from the "<a href="https://geoportal.env.go.jp/">Environmental GeoPortal</a>," a geospatial information portal site provided by the Ministry of the Environment, into QGIS.\n'
+            "When you select the dataset and output destination, the file and style settings are automatically saved.\n"
             "If necessary, it can be loaded as an ArcGIS Feature Service layer."
         )
 
@@ -492,7 +492,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         return None
 
     def tr(self, string):
-        return QCoreApplication.translate("Processing", string)
+        return QCoreApplication.translate("MOELoaderAlgorithm", string)
 
     def createInstance(self):
         return MOELoaderAlgorithm()

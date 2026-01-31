@@ -13,7 +13,7 @@ hasProcessingProvider=yes
 icon=imgs/icon.png
 
 author=geojagaimo
-email=geo.jagaimo@gmail.com
+email=salamanderezo@gmail.com
 homepage=https://github.com/Geo-Jagaimo/qgis-plugin-moe-geoportal-loader
 tracker=https://github.com/Geo-Jagaimo/qgis-plugin-moe-geoportal-loader/issues
 repository=https://github.com/Geo-Jagaimo/qgis-plugin-moe-geoportal-loader

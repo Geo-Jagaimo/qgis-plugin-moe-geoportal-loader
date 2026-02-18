@@ -1,9 +1,9 @@
 """
-RasterFill → QGIS ネイティブシンボル変換モジュール
+RasterFill to QGIS native symbol conversion module.
 
-環境省 植生図の QML スタイルファイルに含まれる
-RasterFill（base64 タイル画像）を、QGIS ネイティブの
-SimpleFill + PointPatternFill / LinePatternFill に変換する。
+Converts RasterFill symbols (base64 tile images) found in QML style files
+from the MOE vegetation maps into native QGIS symbols
+(SimpleFill + PointPatternFill / LinePatternFill).
 """
 
 import base64
@@ -19,7 +19,7 @@ SCALE_3X = "3x:0,0,0,0,0,0"
 
 
 def convert_rasterfill_qml(qml_path):
-    """QML ファイルの RasterFill をネイティブシンボルに変換する。
+    """Convert RasterFill symbols in a QML file to native QGIS symbols.
 
     Returns:
         True if conversion was performed, False otherwise.
@@ -88,7 +88,7 @@ def convert_rasterfill_qml(qml_path):
 
 
 # ===========================================================================
-# ユーティリティ
+# Utilities
 # ===========================================================================
 
 
@@ -112,7 +112,7 @@ def _make_data_defined_properties():
 
 
 # ===========================================================================
-# パターン解析 (Qt QImage 版)
+# Tile pattern analysis (Qt QImage based)
 # ===========================================================================
 
 
@@ -151,7 +151,7 @@ def _analyze_tile(b64_data):
         info["third"] = sorted_colors[2][0]
         info["third_qgis"] = _rgba_to_qgis(sorted_colors[2][0])
 
-    # 前景ピクセル位置
+    # Foreground pixel positions
     fg_positions = []
     for y in range(h):
         for x in range(w):
@@ -167,12 +167,12 @@ def _analyze_tile(b64_data):
     for r in row_cols:
         row_cols[r] = sorted(row_cols[r])
 
-    # =============== 12x12 タイル ===============
+    # =============== 12x12 tile ===============
     if w == 12 and h == 12:
         even_rows = {0, 2, 4, 6, 8, 10}
         even_cols = [0, 2, 4, 6, 8, 10]
 
-        # Type A: 横列等間隔ドット
+        # Type A: evenly spaced row dots
         is_a = fg_rows == even_rows and all(
             row_cols.get(r) == even_cols for r in even_rows
         )
@@ -184,7 +184,7 @@ def _analyze_tile(b64_data):
             info["marker"] = PIXEL_SIZE
             return info
 
-        # Type B: 斜めドット
+        # Type B: staggered diagonal dots
         ba_rows = {0, 4, 8}
         bb_rows = {2, 6, 10}
         ba_cols = [0, 4, 8]
@@ -200,7 +200,7 @@ def _analyze_tile(b64_data):
             info["marker"] = PIXEL_SIZE
             return info
 
-        # Type D: まばらドット
+        # Type D: sparse dots
         d_rows = {2, 6, 10}
         is_d = fg_rows == d_rows and all(
             row_cols.get(r) == ba_cols or row_cols.get(r) == bb_cols
@@ -215,7 +215,7 @@ def _analyze_tile(b64_data):
             info["marker"] = PIXEL_SIZE
             return info
 
-        # Type C: 横列ドット + 追加行ドット
+        # Type C: row dots + extra row dots
         extra_rows = {3, 7, 11}
         base_ok = all(
             row_cols.get(r) == even_cols for r in even_rows if r in fg_rows
@@ -239,7 +239,7 @@ def _analyze_tile(b64_data):
             info["extra_offset_y"] = 3 * PIXEL_SIZE
             return info
 
-        # フォールバック: 密度ベース近似
+        # Fallback: density-based approximation
         fg_count = len(fg_positions)
         density = fg_count / (w * h)
         spacing = (1.0 / (density**0.5)) * PIXEL_SIZE if density > 0 else 6
@@ -250,18 +250,18 @@ def _analyze_tile(b64_data):
         info["marker"] = PIXEL_SIZE
         return info
 
-    # =============== 40x40 タイル: 菱形ハッチ ===============
+    # =============== 40x40 tile: diamond hatch ===============
     if w == 40 and h == 40:
         info["type"] = "diamond_hatch"
         info["line_distance"] = 5.3
         info["line_width"] = 2.25
         return info
 
-    # =============== 64x64 タイル ===============
+    # =============== 64x64 tile ===============
     if w == 64 and h == 64:
-        has_transparent = any(c[3] == 0 for c, _ in sorted_colors)
+        has_transparent = any(color[3] == 0 for color, _ in sorted_colors)
         if has_transparent:
-            opaque = [(c, n) for c, n in sorted_colors if c[3] > 0]
+            opaque = [(color, n) for color, n in sorted_colors if color[3] > 0]
             hatch_main = opaque[0][0]
             info["type"] = "semi_transparent_hatch"
             info["fg_qgis"] = _rgba_to_qgis(hatch_main)
@@ -277,7 +277,7 @@ def _analyze_tile(b64_data):
             info["marker"] = 2 * PIXEL_SIZE
             return info
 
-    # =============== 80x80 タイル ===============
+    # =============== 80x80 tile ===============
     if w == 80 and h == 80:
         info["type"] = "dot_sparse_pair"
         info["dx"] = 4 * PIXEL_SIZE
@@ -286,7 +286,7 @@ def _analyze_tile(b64_data):
         info["marker"] = PIXEL_SIZE
         return info
 
-    # フォールバック
+    # Fallback
     info["type"] = "dot_grid"
     info["dx"] = 3
     info["dy"] = 3
@@ -296,7 +296,7 @@ def _analyze_tile(b64_data):
 
 
 # ===========================================================================
-# QML レイヤー生成
+# QML layer builders
 # ===========================================================================
 
 
@@ -410,7 +410,7 @@ def _build_point_pattern_fill_layer(
 
     layer.append(_make_data_defined_properties())
 
-    # サブシンボル（マーカー）
+    # Sub-symbol (marker)
     sub_sym_name = f"@{sym_name}@{layer_idx}"
     marker_sym = ET.SubElement(
         layer,
@@ -499,7 +499,7 @@ def _build_line_pattern_fill_layer(
         ET.SubElement(opt, "Option", value=pval, type="QString", name=pname)
     layer.append(_make_data_defined_properties())
 
-    # サブシンボル（ライン）
+    # Sub-symbol (line)
     sub_sym_name = f"@{sym_name}@{layer_idx}"
     line_sym = ET.SubElement(
         layer,
@@ -565,7 +565,7 @@ def _build_line_pattern_fill_layer(
 
 
 # ===========================================================================
-# パターン→レイヤー群変換
+# Pattern to layer conversion
 # ===========================================================================
 
 
@@ -575,12 +575,12 @@ def _convert_pattern_to_layers(sym_name, info, start_layer_idx=0):
 
     ptype = info["type"]
 
-    # 1) 背景色 SimpleFill
+    # 1) Background color SimpleFill
     bg_layer = _build_simple_fill_layer(info["bg_qgis"], outline="no")
     layers.append(bg_layer)
     idx += 1
 
-    # 2) パターンレイヤー
+    # 2) Pattern layers
     if ptype in ("dot_grid", "dot_staggered"):
         layers.append(
             _build_point_pattern_fill_layer(

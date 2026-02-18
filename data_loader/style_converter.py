@@ -6,19 +6,49 @@ from the MOE vegetation maps into native QGIS symbols
 (SimpleFill + PointPatternFill / LinePatternFill).
 """
 
+from __future__ import annotations
+
 import base64
 import hashlib
 import uuid
 import xml.etree.ElementTree as ET
+from typing import TypedDict
 
+from qgis.core import Qgis, QgsMessageLog
 from qgis.PyQt.QtCore import QByteArray
 from qgis.PyQt.QtGui import QImage, qAlpha, qBlue, qGreen, qRed
 
 PIXEL_SIZE = 0.75
 SCALE_3X = "3x:0,0,0,0,0,0"
 
+_LOG_TAG = "RasterFill Converter"
 
-def convert_rasterfill_qml(qml_path):
+
+class PatternInfo(TypedDict, total=False):
+    type: str
+    w: int
+    h: int
+    bg: tuple[int, int, int, int]
+    fg: tuple[int, int, int, int]
+    bg_qgis: str
+    fg_qgis: str
+    num_colors: int
+    third: tuple[int, int, int, int]
+    third_qgis: str
+    dx: float
+    dy: float
+    disp_x: float
+    marker: float
+    extra_dx: float
+    extra_dy: float
+    extra_disp_x: float
+    extra_offset_x: float
+    extra_offset_y: float
+    line_distance: float
+    line_width: float
+
+
+def convert_rasterfill_qml(qml_path: str) -> bool:
     """Convert RasterFill symbols in a QML file to native QGIS symbols.
 
     Returns:
@@ -31,7 +61,7 @@ def convert_rasterfill_qml(qml_path):
     if symbols is None:
         return False
 
-    pattern_cache = {}
+    pattern_cache: dict[str, PatternInfo] = {}
     converted = 0
 
     for symbol in symbols.findall("symbol"):
@@ -58,7 +88,7 @@ def convert_rasterfill_qml(qml_path):
 
             cache_key = hashlib.md5(b64_data.encode()).hexdigest()
             if cache_key not in pattern_cache:
-                pattern_cache[cache_key] = _analyze_tile(b64_data)
+                pattern_cache[cache_key] = _analyze_tile(b64_data, cache_key)
             info = pattern_cache[cache_key]
 
             layer_list = list(symbol)
@@ -84,6 +114,12 @@ def convert_rasterfill_qml(qml_path):
         f.write("<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n")
         f.write(content)
 
+    QgsMessageLog.logMessage(
+        f"Converted {converted} RasterFill symbol(s) "
+        f"({len(pattern_cache)} unique pattern(s))",
+        _LOG_TAG,
+        Qgis.Info,
+    )
     return True
 
 
@@ -92,17 +128,17 @@ def convert_rasterfill_qml(qml_path):
 # ===========================================================================
 
 
-def _rgba_to_qgis(rgba):
+def _rgba_to_qgis(rgba: tuple[int, int, int, int]) -> str:
     r, g, b, a = int(rgba[0]), int(rgba[1]), int(rgba[2]), int(rgba[3])
     rf, gf, bf, af = r / 255, g / 255, b / 255, a / 255
     return f"{r},{g},{b},{a},rgb:{rf:.7g},{gf:.7g},{bf:.7g},{af:.7g}"
 
 
-def _new_uuid():
+def _new_uuid() -> str:
     return "{" + str(uuid.uuid4()) + "}"
 
 
-def _make_data_defined_properties():
+def _make_data_defined_properties() -> ET.Element:
     ddp = ET.Element("data_defined_properties")
     opt = ET.SubElement(ddp, "Option", type="Map")
     ET.SubElement(opt, "Option", value="", type="QString", name="name")
@@ -116,17 +152,30 @@ def _make_data_defined_properties():
 # ===========================================================================
 
 
-def _analyze_tile(b64_data):
+def _analyze_tile(b64_data: str, cache_key: str = "") -> PatternInfo:
     raw = base64.b64decode(b64_data)
     ba = QByteArray(raw)
     img = QImage()
-    img.loadFromData(ba)
+    if not img.loadFromData(ba) or img.isNull():
+        QgsMessageLog.logMessage(
+            f"Failed to decode tile image (cache_key={cache_key})",
+            _LOG_TAG,
+            Qgis.Warning,
+        )
+        return PatternInfo(
+            type="dot_grid", w=0, h=0,
+            bg=(255, 255, 255, 255), fg=(0, 0, 0, 255),
+            bg_qgis=_rgba_to_qgis((255, 255, 255, 255)),
+            fg_qgis=_rgba_to_qgis((0, 0, 0, 255)),
+            num_colors=2, dx=3, dy=3, disp_x=0, marker=PIXEL_SIZE,
+        )
     img = img.convertToFormat(QImage.Format_ARGB32)
 
     w = img.width()
     h = img.height()
 
-    colors = {}
+    # Pass 1: count unique colors
+    colors: dict[tuple[int, int, int, int], int] = {}
     for y in range(h):
         for x in range(w):
             px = img.pixel(x, y)
@@ -137,35 +186,33 @@ def _analyze_tile(b64_data):
     bg_color = sorted_colors[0][0]
     fg_color = sorted_colors[1][0] if len(sorted_colors) >= 2 else bg_color
 
-    info = {
-        "w": w,
-        "h": h,
-        "bg": bg_color,
-        "fg": fg_color,
-        "bg_qgis": _rgba_to_qgis(bg_color),
-        "fg_qgis": _rgba_to_qgis(fg_color),
-        "num_colors": len(sorted_colors),
-    }
+    info = PatternInfo(
+        w=w,
+        h=h,
+        bg=bg_color,
+        fg=fg_color,
+        bg_qgis=_rgba_to_qgis(bg_color),
+        fg_qgis=_rgba_to_qgis(fg_color),
+        num_colors=len(sorted_colors),
+    )
 
     if len(sorted_colors) >= 3:
         info["third"] = sorted_colors[2][0]
         info["third_qgis"] = _rgba_to_qgis(sorted_colors[2][0])
 
-    # Foreground pixel positions
-    fg_positions = []
+    # Pass 2: collect foreground pixel positions (fg_color is now known)
+    row_cols: dict[int, list[int]] = {}
     for y in range(h):
         for x in range(w):
             px = img.pixel(x, y)
             k = (qRed(px), qGreen(px), qBlue(px), qAlpha(px))
             if k == fg_color:
-                fg_positions.append((y, x))  # (row, col)
+                row_cols.setdefault(y, []).append(x)
 
-    fg_rows = set(r for r, c in fg_positions)
-    row_cols = {}
-    for r, c in fg_positions:
-        row_cols.setdefault(r, []).append(c)
     for r in row_cols:
         row_cols[r] = sorted(row_cols[r])
+
+    fg_rows = set(row_cols.keys())
 
     # =============== 12x12 tile ===============
     if w == 12 and h == 12:
@@ -240,7 +287,7 @@ def _analyze_tile(b64_data):
             return info
 
         # Fallback: density-based approximation
-        fg_count = len(fg_positions)
+        fg_count = sum(len(cols) for cols in row_cols.values())
         density = fg_count / (w * h)
         spacing = (1.0 / (density**0.5)) * PIXEL_SIZE if density > 0 else 6
         info["type"] = "dot_grid"
@@ -300,7 +347,7 @@ def _analyze_tile(b64_data):
 # ===========================================================================
 
 
-def _build_simple_fill_layer(color_qgis, outline="no"):
+def _build_simple_fill_layer(color_qgis, outline="no", style="solid"):
     layer = ET.Element(
         "layer",
         {
@@ -338,7 +385,7 @@ def _build_simple_fill_layer(color_qgis, outline="no"):
     ET.SubElement(
         opt, "Option", value="Point", type="QString", name="outline_width_unit"
     )
-    ET.SubElement(opt, "Option", value="solid", type="QString", name="style")
+    ET.SubElement(opt, "Option", value=style, type="QString", name="style")
     layer.append(_make_data_defined_properties())
     return layer
 
@@ -569,16 +616,21 @@ def _build_line_pattern_fill_layer(
 # ===========================================================================
 
 
-def _convert_pattern_to_layers(sym_name, info, start_layer_idx=0):
-    layers = []
-    idx = start_layer_idx
-
+def _convert_pattern_to_layers(sym_name, info):
     ptype = info["type"]
 
-    # 1) Background color SimpleFill
-    bg_layer = _build_simple_fill_layer(info["bg_qgis"], outline="no")
-    layers.append(bg_layer)
-    idx += 1
+    # 1) Background SimpleFill (varies by pattern type)
+    if ptype == "diamond_hatch":
+        bg_layer = _build_simple_fill_layer(info["fg_qgis"])
+    elif ptype == "semi_transparent_hatch":
+        bg_layer = _build_simple_fill_layer(
+            "0,0,0,0,rgb:0,0,0,0", outline="no", style="no"
+        )
+    else:
+        bg_layer = _build_simple_fill_layer(info["bg_qgis"])
+
+    layers = [bg_layer]
+    idx = 1
 
     # 2) Pattern layers
     if ptype in ("dot_grid", "dot_staggered"):
@@ -594,7 +646,6 @@ def _convert_pattern_to_layers(sym_name, info, start_layer_idx=0):
                 color_qgis=info["fg_qgis"],
             )
         )
-        idx += 1
 
     elif ptype == "dot_grid_plus":
         layers.append(
@@ -609,11 +660,10 @@ def _convert_pattern_to_layers(sym_name, info, start_layer_idx=0):
                 color_qgis=info["fg_qgis"],
             )
         )
-        idx += 1
         layers.append(
             _build_point_pattern_fill_layer(
                 sym_name,
-                idx,
+                idx + 1,
                 info,
                 dx=info["extra_dx"],
                 dy=info["extra_dy"],
@@ -624,10 +674,8 @@ def _convert_pattern_to_layers(sym_name, info, start_layer_idx=0):
                 offset_y=info.get("extra_offset_y", 0),
             )
         )
-        idx += 1
 
     elif ptype == "diamond_hatch":
-        layers[0] = _build_simple_fill_layer(info["fg_qgis"], outline="no")
         line_color = info["bg_qgis"]
         dist = info["line_distance"]
         lw = info["line_width"]
@@ -637,30 +685,23 @@ def _convert_pattern_to_layers(sym_name, info, start_layer_idx=0):
                 color_qgis=line_color,
             )
         )
-        idx += 1
         layers.append(
             _build_line_pattern_fill_layer(
-                sym_name, idx, angle=135, distance=dist, line_width=lw,
+                sym_name, idx + 1, angle=135, distance=dist, line_width=lw,
                 color_qgis=line_color,
             )
         )
-        idx += 1
 
     elif ptype == "semi_transparent_hatch":
         line_color = info["fg_qgis"]
         dist = info["line_distance"]
         lw = info["line_width"]
-        layers[0] = _build_simple_fill_layer("0,0,0,0,rgb:0,0,0,0", outline="no")
-        for opt_elem in layers[0].iter("Option"):
-            if opt_elem.get("name") == "style":
-                opt_elem.set("value", "no")
         layers.append(
             _build_line_pattern_fill_layer(
                 sym_name, idx, angle=45, distance=dist, line_width=lw,
                 color_qgis=line_color,
             )
         )
-        idx += 1
 
     elif ptype == "tricolor_dot":
         layers.append(
@@ -675,12 +716,11 @@ def _convert_pattern_to_layers(sym_name, info, start_layer_idx=0):
                 color_qgis=info["fg_qgis"],
             )
         )
-        idx += 1
         if "third_qgis" in info:
             layers.append(
                 _build_point_pattern_fill_layer(
                     sym_name,
-                    idx,
+                    idx + 1,
                     info,
                     dx=info["dx"] * 2,
                     dy=info["dy"] * 2,
@@ -689,7 +729,6 @@ def _convert_pattern_to_layers(sym_name, info, start_layer_idx=0):
                     color_qgis=info["third_qgis"],
                 )
             )
-            idx += 1
 
     elif ptype == "dot_sparse_pair":
         layers.append(
@@ -704,6 +743,5 @@ def _convert_pattern_to_layers(sym_name, info, start_layer_idx=0):
                 color_qgis=info["fg_qgis"],
             )
         )
-        idx += 1
 
     return layers

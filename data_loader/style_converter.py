@@ -163,11 +163,18 @@ def _analyze_tile(b64_data: str, cache_key: str = "") -> PatternInfo:
             Qgis.Warning,
         )
         return PatternInfo(
-            type="dot_grid", w=0, h=0,
-            bg=(255, 255, 255, 255), fg=(0, 0, 0, 255),
+            type="dot_grid",
+            w=0,
+            h=0,
+            bg=(255, 255, 255, 255),
+            fg=(0, 0, 0, 255),
             bg_qgis=_rgba_to_qgis((255, 255, 255, 255)),
             fg_qgis=_rgba_to_qgis((0, 0, 0, 255)),
-            num_colors=2, dx=3, dy=3, disp_x=0, marker=PIXEL_SIZE,
+            num_colors=2,
+            dx=3,
+            dy=3,
+            disp_x=0,
+            marker=PIXEL_SIZE,
         )
     img = img.convertToFormat(QImage.Format_ARGB32)
 
@@ -236,9 +243,11 @@ def _analyze_tile(b64_data: str, cache_key: str = "") -> PatternInfo:
         bb_rows = {2, 6, 10}
         ba_cols = [0, 4, 8]
         bb_cols = [2, 6, 10]
-        is_b = fg_rows == ba_rows | bb_rows and all(
-            row_cols.get(r) == ba_cols for r in ba_rows if r in fg_rows
-        ) and all(row_cols.get(r) == bb_cols for r in bb_rows if r in fg_rows)
+        is_b = (
+            fg_rows == ba_rows | bb_rows
+            and all(row_cols.get(r) == ba_cols for r in ba_rows if r in fg_rows)
+            and all(row_cols.get(r) == bb_cols for r in bb_rows if r in fg_rows)
+        )
         if is_b:
             info["type"] = "dot_staggered"
             info["dx"] = 4 * PIXEL_SIZE
@@ -264,9 +273,7 @@ def _analyze_tile(b64_data: str, cache_key: str = "") -> PatternInfo:
 
         # Type C: row dots + extra row dots
         extra_rows = {3, 7, 11}
-        base_ok = all(
-            row_cols.get(r) == even_cols for r in even_rows if r in fg_rows
-        )
+        base_ok = all(row_cols.get(r) == even_cols for r in even_rows if r in fg_rows)
         has_extra = extra_rows.issubset(fg_rows)
         if base_ok and has_extra:
             extra_cols = row_cols.get(3, [])
@@ -681,13 +688,21 @@ def _convert_pattern_to_layers(sym_name, info):
         lw = info["line_width"]
         layers.append(
             _build_line_pattern_fill_layer(
-                sym_name, idx, angle=45, distance=dist, line_width=lw,
+                sym_name,
+                idx,
+                angle=45,
+                distance=dist,
+                line_width=lw,
                 color_qgis=line_color,
             )
         )
         layers.append(
             _build_line_pattern_fill_layer(
-                sym_name, idx + 1, angle=135, distance=dist, line_width=lw,
+                sym_name,
+                idx + 1,
+                angle=135,
+                distance=dist,
+                line_width=lw,
                 color_qgis=line_color,
             )
         )
@@ -698,7 +713,11 @@ def _convert_pattern_to_layers(sym_name, info):
         lw = info["line_width"]
         layers.append(
             _build_line_pattern_fill_layer(
-                sym_name, idx, angle=45, distance=dist, line_width=lw,
+                sym_name,
+                idx,
+                angle=45,
+                distance=dist,
+                line_width=lw,
                 color_qgis=line_color,
             )
         )

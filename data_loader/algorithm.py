@@ -144,6 +144,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             context,
             feedback,
             dataset=dataset,
+            dataset_key=dataset_key,
             has_prefecture=has_prefecture,
             pref_idx=pref_idx if has_prefecture else None,
         )
@@ -280,6 +281,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         context,
         feedback,
         dataset=None,
+        dataset_key=None,
         has_prefecture=False,
         pref_idx=None,
     ):
@@ -385,6 +387,11 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             res, err = vector_layer.saveNamedStyle(qml_path)
             if res:
                 feedback.pushInfo(f"Saved style file: {qml_path}")
+                if self._is_vegetation_dataset(dataset_key):
+                    from .style_converter import convert_rasterfill_qml
+
+                    if convert_rasterfill_qml(qml_path):
+                        feedback.pushInfo("Converted RasterFill to native symbols")
             else:
                 feedback.reportError(f"Failed to save style to {qml_path}: {err}")
 
@@ -415,6 +422,11 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             )
 
         return dest_id
+
+    def _is_vegetation_dataset(self, dataset_key):
+        if not dataset_key:
+            return False
+        return dataset_key.startswith(("vg_", "vgsk_", "veg")) or "Veg" in dataset_key
 
     def _crs_from_esri_spatial_ref(self, spatial_ref, feedback):
         if not spatial_ref:

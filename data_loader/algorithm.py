@@ -395,7 +395,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             res, err = vector_layer.saveNamedStyle(qml_path)
             if res:
                 feedback.pushInfo(f"Saved style file: {qml_path}")
-                if self._is_vegetation_dataset(dataset_key):
+                if dataset_key == "vg_50000":
                     from .style_converter import convert_rasterfill_qml
 
                     if convert_rasterfill_qml(qml_path):
@@ -430,11 +430,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             )
 
         return dest_id
-
-    def _is_vegetation_dataset(self, dataset_key):
-        if not dataset_key:
-            return False
-        return dataset_key.startswith(("vg_", "vgsk_", "veg")) or "Veg" in dataset_key
 
     def _crs_from_esri_spatial_ref(self, spatial_ref, feedback):
         if not spatial_ref:

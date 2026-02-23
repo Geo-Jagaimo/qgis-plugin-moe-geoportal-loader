@@ -180,7 +180,9 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
     def _fetch_json(self, url, feedback, error_context):
         try:
-            with urlopen(url) as response:
+            if not url.startswith(("https://", "http://")):
+                raise ValueError(f"Unsupported URL scheme: {url}")
+            with urlopen(url) as response:  # noqa: S310
                 return json.loads(response.read().decode())
         except Exception as e:
             feedback.reportError(f"{error_context}: {str(e)}")
@@ -202,12 +204,11 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         layer_id = first_layer.get("id")
         layer_url = f"{url}/{layer_id}"
 
-        layer_meta = (
-            self._fetch_json(
-                f"{layer_url}?f=json", feedback, "Failed to fetch layer metadata"
-            )
-            or {}
-        )
+        # fmt: off
+        layer_meta = self._fetch_json(
+            f"{layer_url}?f=json", feedback, "Failed to fetch layer metadata"
+        ) or {}
+        # fmt: on
 
         return (layer_url, service_meta, layer_meta)
 
@@ -229,11 +230,13 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
     def _set_vector_layer_crs(
         self, vector_layer, service_meta, layer_meta, parameters, context, feedback
     ):
+        # fmt: off
         spatial_ref = (
-            (layer_meta.get("extent") or {}).get("spatialReference")
-            or layer_meta.get("spatialReference")
-            or service_meta.get("spatialReference", {})
+            (layer_meta.get("extent") or {}).get("spatialReference") or
+            layer_meta.get("spatialReference") or
+            service_meta.get("spatialReference", {})
         )
+        # fmt: on
 
         esri_crs = self._crs_from_esri_spatial_ref(spatial_ref, feedback)
 

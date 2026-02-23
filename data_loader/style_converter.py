@@ -255,9 +255,9 @@ def _analyze_tile(b64_data: str, cache_key: str = "") -> PatternInfo:
         bb_cols = [2, 6, 10]
         # fmt: off
         is_b = (
-            fg_rows == ba_rows | bb_rows and
-            all(row_cols.get(r) == ba_cols for r in ba_rows if r in fg_rows) and
-            all(row_cols.get(r) == bb_cols for r in bb_rows if r in fg_rows)
+            fg_rows == ba_rows | bb_rows
+            and all(row_cols.get(r) == ba_cols for r in ba_rows if r in fg_rows)
+            and all(row_cols.get(r) == bb_cols for r in bb_rows if r in fg_rows)
         )
         # fmt: on
         if is_b:

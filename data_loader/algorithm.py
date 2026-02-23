@@ -232,9 +232,9 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
     ):
         # fmt: off
         spatial_ref = (
-            (layer_meta.get("extent") or {}).get("spatialReference") or
-            layer_meta.get("spatialReference") or
-            service_meta.get("spatialReference", {})
+            (layer_meta.get("extent") or {}).get("spatialReference")
+            or layer_meta.get("spatialReference")
+            or service_meta.get("spatialReference", {})
         )
         # fmt: on
 

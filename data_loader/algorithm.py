@@ -230,13 +230,10 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
     def _set_vector_layer_crs(
         self, vector_layer, service_meta, layer_meta, parameters, context, feedback
     ):
-        # fmt: off
-        spatial_ref = (
-            (layer_meta.get("extent") or {}).get("spatialReference")
-            or layer_meta.get("spatialReference")
-            or service_meta.get("spatialReference", {})
-        )
-        # fmt: on
+        extent_ref = (layer_meta.get("extent") or {}).get("spatialReference")
+        layer_ref = layer_meta.get("spatialReference")
+        service_ref = service_meta.get("spatialReference", {})
+        spatial_ref = extent_ref or layer_ref or service_ref
 
         esri_crs = self._crs_from_esri_spatial_ref(spatial_ref, feedback)
 

@@ -253,13 +253,10 @@ def _analyze_tile(b64_data: str, cache_key: str = "") -> PatternInfo:
         bb_rows = {2, 6, 10}
         ba_cols = [0, 4, 8]
         bb_cols = [2, 6, 10]
-        # fmt: off
-        is_b = (
-            fg_rows == ba_rows | bb_rows
-            and all(row_cols.get(r) == ba_cols for r in ba_rows if r in fg_rows)
-            and all(row_cols.get(r) == bb_cols for r in bb_rows if r in fg_rows)
-        )
-        # fmt: on
+        rows_match = fg_rows == ba_rows | bb_rows
+        a_ok = all(row_cols.get(r) == ba_cols for r in ba_rows if r in fg_rows)
+        b_ok = all(row_cols.get(r) == bb_cols for r in bb_rows if r in fg_rows)
+        is_b = rows_match and a_ok and b_ok
         if is_b:
             info["type"] = "dot_staggered"
             info["dx"] = 4 * PIXEL_SIZE

@@ -99,8 +99,8 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         _, has_prefecture = self._dataset_mapping[dataset_idx]
 
         if has_prefecture:
-            pref_idx = self.parameterAsEnum(parameters, self.PREFECTURE, context)
-            if pref_idx is None:
+            raw_value = parameters.get(self.PREFECTURE)
+            if raw_value is None or raw_value == "":
                 return False, self.tr("Please select a prefecture.")
 
         return super().checkParameterValues(parameters, context)

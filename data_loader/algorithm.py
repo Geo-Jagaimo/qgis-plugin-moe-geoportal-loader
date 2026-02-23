@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import tempfile
 import traceback
 from pathlib import Path
 from urllib.request import urlopen
@@ -14,6 +15,7 @@ from qgis.core import (
     QgsFields,
     QgsProcessingAlgorithm,
     QgsProcessingContext,
+    QgsProcessingLayerPostProcessorInterface,
     QgsProcessingParameterBoolean,
     QgsProcessingParameterCrs,
     QgsProcessingParameterEnum,
@@ -25,6 +27,24 @@ from qgis.PyQt.QtCore import QCoreApplication, QUrl
 
 from .settings_datasets import DATASETS
 from .settings_prefecture import PREFECTURES
+
+
+class _StylePostProcessor(QgsProcessingLayerPostProcessorInterface):
+    _instance = None
+
+    def __init__(self, qml_path):
+        super().__init__()
+        self.qml_path = qml_path
+        _StylePostProcessor._instance = self
+
+    def postProcessLayer(self, layer, context, feedback):
+        if self.qml_path and os.path.exists(self.qml_path):
+            ok, err = layer.loadNamedStyle(self.qml_path)
+            if ok:
+                layer.triggerRepaint()
+                feedback.pushInfo(f"Applied style to layer: {layer.name()}")
+            else:
+                feedback.pushInfo(f"Failed to apply style: {err}")
 
 
 class MOELoaderAlgorithm(QgsProcessingAlgorithm):
@@ -389,20 +409,12 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         # Check if this is a real file path (absolute path)
         is_file_output = output_path and os.path.isabs(output_path)
 
+        # Save style QML
+        qml_path = self._save_style_qml(
+            vector_layer, output_path, dataset_key, is_file_output, feedback
+        )
+
         if is_file_output:
-            base, _ = os.path.splitext(output_path)
-            qml_path = base + ".qml"
-            res, err = vector_layer.saveNamedStyle(qml_path)
-            if res:
-                feedback.pushInfo(f"Saved style file: {qml_path}")
-                if dataset_key == "vg_50000":
-                    from .style_converter import convert_rasterfill_qml
-
-                    if convert_rasterfill_qml(qml_path):
-                        feedback.pushInfo("Converted RasterFill to native symbols")
-            else:
-                feedback.reportError(f"Failed to save style to {qml_path}: {err}")
-
             # Load the saved layer and add it to the project with style
             try:
                 saved_layer = QgsVectorLayer(output_path, layer_name, "ogr")
@@ -420,16 +432,39 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             except Exception as e:
                 self._report_exception(feedback, "Error loading saved layer", e)
         else:
-            # For memory layers or when output path is not determined
+            # For memory layers: apply style via post-processor
             feedback.pushInfo(f"Setting layer name to: {layer_name}")
-            context.addLayerToLoadOnCompletion(
-                dest_id,
-                QgsProcessingContext.LayerDetails(
-                    layer_name, QgsProject.instance(), self.OUTPUT
-                ),
+            details = QgsProcessingContext.LayerDetails(
+                layer_name, QgsProject.instance(), self.OUTPUT
             )
+            if qml_path:
+                details.setPostProcessor(_StylePostProcessor(qml_path))
+            context.addLayerToLoadOnCompletion(dest_id, details)
 
         return dest_id
+
+    def _save_style_qml(
+        self, vector_layer, output_path, dataset_key, is_file_output, feedback
+    ):
+        if is_file_output:
+            base, _ = os.path.splitext(output_path)
+            qml_path = base + ".qml"
+        else:
+            fd, qml_path = tempfile.mkstemp(suffix=".qml")
+            os.close(fd)
+
+        res, err = vector_layer.saveNamedStyle(qml_path)
+        if res:
+            feedback.pushInfo(f"Saved style file: {qml_path}")
+            if dataset_key == "vg_50000":
+                from .style_converter import convert_rasterfill_qml
+
+                if convert_rasterfill_qml(qml_path):
+                    feedback.pushInfo("Converted RasterFill to native symbols")
+            return qml_path
+        else:
+            feedback.reportError(f"Failed to save style to {qml_path}: {err}")
+            return None
 
     def _crs_from_esri_spatial_ref(self, spatial_ref, feedback):
         if not spatial_ref:

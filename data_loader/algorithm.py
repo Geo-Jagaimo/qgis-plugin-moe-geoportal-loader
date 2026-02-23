@@ -57,13 +57,14 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
-        prefecture_names = [name for name in PREFECTURES.values()]
+        prefecture_names = list(PREFECTURES.values())
         self.addParameter(
             QgsProcessingParameterEnum(
                 self.PREFECTURE,
                 self.tr("Prefectures"),
                 options=prefecture_names,
-                defaultValue=0,
+                optional=True,
+                defaultValue=None,
             )
         )
 
@@ -93,6 +94,17 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
+    def checkParameterValues(self, parameters, context):
+        dataset_idx = self.parameterAsEnum(parameters, self.CATEGORY, context)
+        _, has_prefecture = self._dataset_mapping[dataset_idx]
+
+        if has_prefecture:
+            raw_value = parameters.get(self.PREFECTURE)
+            if raw_value is None or raw_value == "":
+                return False, self.tr("Please select a prefecture.")
+
+        return super().checkParameterValues(parameters, context)
+
     def processAlgorithm(self, parameters, context, feedback):
         dataset_idx = self.parameterAsEnum(parameters, self.CATEGORY, context)
         dataset_key, has_prefecture = self._dataset_mapping[dataset_idx]
@@ -102,10 +114,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
         if has_prefecture:
             pref_idx = self.parameterAsEnum(parameters, self.PREFECTURE, context)
-            if pref_idx is None or pref_idx == 0:
-                feedback.reportError(self.tr("Please select a prefecture."))
-                return {"OUTPUT": None}
-
             pref_code = list(PREFECTURES.keys())[pref_idx]
 
             # Handle specific URL for Hokkaido

@@ -140,18 +140,13 @@ class TestPrefectures(unittest.TestCase):
     def test_prefectures_not_empty(self):
         """Verify that prefecture data is not empty"""
         self.assertTrue(PREFECTURES, "PREFECTURES must not be empty")
-        self.assertGreater(
-            len(PREFECTURES), 47, "PREFECTURES must contain at least 48 entries"
+        self.assertEqual(
+            len(PREFECTURES), 47, "PREFECTURES must contain exactly 47 entries"
         )
 
-    def test_placeholder_prefecture(self):
-        """Verify that placeholder prefecture (00) exists"""
-        self.assertIn("00", PREFECTURES, "Prefecture code '00' must exist")
-        self.assertEqual(
-            PREFECTURES["00"],
-            "都道府県を選択してください",
-            "Prefecture code '00' must be the placeholder",
-        )
+    def test_no_placeholder_prefecture(self):
+        """Verify that placeholder prefecture (00) does not exist"""
+        self.assertNotIn("00", PREFECTURES, "Prefecture code '00' must not exist")
 
     def test_all_prefectures_exist(self):
         """Verify that all 47 prefectures exist"""

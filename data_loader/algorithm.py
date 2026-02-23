@@ -180,7 +180,9 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
     def _fetch_json(self, url, feedback, error_context):
         try:
-            with urlopen(url) as response:
+            if not url.startswith(("https://", "http://")):
+                raise ValueError(f"Unsupported URL scheme: {url}")
+            with urlopen(url) as response:  # noqa: S310
                 return json.loads(response.read().decode())
         except Exception as e:
             feedback.reportError(f"{error_context}: {str(e)}")

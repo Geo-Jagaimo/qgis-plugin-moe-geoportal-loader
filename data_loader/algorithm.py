@@ -57,13 +57,14 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
-        prefecture_names = [name for name in PREFECTURES.values()]
+        prefecture_names = list(PREFECTURES.values())
         self.addParameter(
             QgsProcessingParameterEnum(
                 self.PREFECTURE,
                 self.tr("Prefectures"),
                 options=prefecture_names,
-                defaultValue=0,
+                optional=True,
+                defaultValue=None,
             )
         )
 
@@ -99,7 +100,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
         if has_prefecture:
             pref_idx = self.parameterAsEnum(parameters, self.PREFECTURE, context)
-            if pref_idx is None or pref_idx == 0:
+            if pref_idx is None:
                 return False, self.tr("Please select a prefecture.")
 
         return super().checkParameterValues(parameters, context)

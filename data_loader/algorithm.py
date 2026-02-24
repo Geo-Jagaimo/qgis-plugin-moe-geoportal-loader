@@ -3,7 +3,6 @@ import os
 import re
 import tempfile
 import traceback
-from pathlib import Path
 from urllib.request import urlopen
 
 from qgis.core import (
@@ -23,7 +22,7 @@ from qgis.core import (
     QgsProject,
     QgsVectorLayer,
 )
-from qgis.PyQt.QtCore import QCoreApplication, QUrl
+from qgis.PyQt.QtCore import QCoreApplication
 
 from .settings_datasets import DATASETS
 from .settings_prefecture import PREFECTURES
@@ -494,33 +493,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 return crs
 
         return None
-
-    def _file_path_from_source(self, layer):
-        src = layer.source() or ""
-        base = src.split("|", 1)[0]
-        if base.startswith("file:"):
-            base = QUrl(base).toLocalFile()
-        return base
-
-    def _apply_qml_if_exists(self, layer, feedback):
-        path = self._file_path_from_source(layer)
-        if not path:
-            return
-        p = Path(path)
-        if not p.exists():
-            return
-        candidates = [p.with_suffix(".qml")]
-        if p.suffix.lower() in [".gpkg", ".sqlite"]:
-            candidates.append(p.parent / f"{p.stem}_{layer.name()}.qml")
-        for qml in candidates:
-            if qml.exists():
-                ok, err = layer.loadNamedStyle(str(qml))
-                if ok:
-                    layer.triggerRepaint()
-                    feedback.pushInfo(f"Applied QML style: {qml}")
-                else:
-                    feedback.pushInfo(f"Failed to apply QML style: {err}")
-                break
 
     def shortHelpString(self):
         return self.tr(

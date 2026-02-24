@@ -1,31 +1,66 @@
 # MOE Geoportal Loader
 
-## 概要
+[日本語](README.ja.md)
 
-- 環境省が運営する地理空間情報ポータルサイト「[環境ジオポータル](https://geoportal.env.go.jp)」で公開されているデータのうち、タイプが「Feature Service」で、ライセンスが「CC BY 4.0」のものを QGIS に直接読み込めるプラグインです。
-- [QGIS Pyton Plugins Repository](https://plugins.qgis.org/plugins/moe_geoportal_loader)に登録されているため、QGIS プラグインマネージャから直接インストールできます。
+## Overview
 
-## インストール
+- This plugin allows you to directly load datasets published on [MOE GeoPortal](https://geoportal.env.go.jp), a geospatial information portal operated by Japan's Ministry of the Environment, into QGIS.
+- It targets datasets with the type "Feature Service" and licensed under CC BY 4.0.
 
-- QGIS を起動し、メニューバーより［プラグイン］→［プラグインの管理とインストール...］の順にクリックします。
-- プラグインマネージャが起動するため、［全プラグイン］タブで「moe」と検索します。
-- 「MOE Geoportal Loader」を選択し、［インストール］ボタンよりインストールできます。
-- インストールが完了したら、［インストール済み］タブで「MOE Geoportal Loader」にチェックが入っていることを確認し、プラグインマネージャを閉じます。
+## Features
 
-<img src='./imgs/install.png' alt="インストール" width="50%">
+- Load environmental datasets directly from MOE GeoPortal into QGIS.
+- Automatic file and style saving when selecting a dataset and output destination.
+- Optional loading as ArcGIS Feature Service layers.
+- Integrated into the QGIS Processing Toolbox.
 
-## 使用方法
+## Datasets
 
-- プラグインは、プロセシングツールボックスに追加されます。
-- 読み込みアルゴリズムはデータセットごとに分かれています。「MOE Geoportal Loader」トグルを展開して、利用したいデータセットを選択してください。
+#### Vegetation Maps（11 datasets）
 
-<img src='./imgs/usage.png' alt="プロセシングツールボックス" width="50%">
+- Existing Vegetation Map（1:50,000）：by prefecture.
+- Naturalness Classification Map（1:50,000）：by prefecture.
+- Existing Vegetation Map 2024：Hokkaido, Tohoku, Kanto, Hokuriku, Chubu, Kinki, Chushikoku, Kyushu-Okinawa.
+- Northern Territory Vegetation Overview Map.
 
-- データセットと出力先を選択すると、ファイルとスタイル設定が自動的に保存されます。
-- 必要に応じて、ArcGIS Feature Service レイヤとして読み込むことができます。
-- 「現存植生図 2024」は非常に大きなデータセットです。利用の際は、処理負荷や動作環境にご注意ください。
+#### Mammal Distribution Surveys（4 datasets）
 
-<img src='./imgs/dialog.png' alt="プラグインダイアログ" width="50%">
+- Medium/Large Mammal Distribution Survey：Badger, Fox, Raccoon Dog.
+- National Bear Distribution Mesh（Basic Survey 1980）.
+
+#### Coral Reef Ecosystem Surveys（19 datasets）
+
+- Shallow Coral Ecosystem Survey：Tokara Islands（2021）, Kume Island（2018）, Tarama Island（2018）, Osumi Islands（2021）, Amami Islands（2018–2019）, Miyako Island（2018）, Ogasawara Islands（2020）, Sekisei Lagoon（2017）.
+- 4th Coral Survey（1988–1993）：Coral Reef Distribution Area, Small-scale Ogasawara Coral Reef Area, Non-Coral Reef Distribution Area.
+- 5th Coral Survey（1993–1999）：Distribution Area.
+
+#### Coral Reef Change Detection（24 datasets）
+
+- Amami-Oshima：H20 vs R01, 4th vs R01, 5th vs R01.
+- Tokunoshima：H20 vs R01, 4th vs R01, 5th vs R01.
+- Kume Island：H20 vs H30, 4th vs H30.
+- Miyako Island：H20 vs H30, 4th vs H30.
+- Ogasawara Islands：H20 vs H30, 4th vs R02, 5th vs R02.
+- Okinoerabu Island：H20 vs H30, 4th vs H30.
+- Tarama Island：H20 vs H30, 4th vs H30.
+- Yoron Island：H20 vs H30, 4th vs H30.
+- Takarajima & Kodakarajima：H20 vs R03, 4th vs R03.
+- Tanegashima & Yakushima：H20 vs R03, 4th vs R03, 5th vs R03.
+
+#### Seaweed Bed Surveys（7 datasets）
+
+- 4th Seaweed Bed Survey（1988–1993）.
+- 5th Seaweed Bed Survey（1993–1999）.
+- Seaweed Bed Survey（2018–2020）：UTM Zone 51, 52, 53, 54, 55.
+
+## Requirements
+
+- QGIS 3.40 or later
+
+## License
+
+- This plugin is licensed under the [GNU General Public License v2.0](LICENSE).
+- The datasets loaded by this plugin are provided by MOE GeoPortal under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 ## Authors
 

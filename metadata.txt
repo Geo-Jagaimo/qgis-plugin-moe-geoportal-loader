@@ -2,8 +2,8 @@
 name=MOE Geoportal Loader
 qgisMinimumVersion=3.40
 qgisMaximumVersion=4.99
-about=データセットと出力先を選択すると、ファイルとスタイル設定が自動的に保存されます。必要に応じて、ArcGIS Feature Serviceレイヤとして読み込むことができます。 / When you select a dataset and output destination, the file and style settings are automatically saved. If needed, you can load it as an ArcGIS Feature Service layer.
-description=環境省が提供する地理空間情報ポータルサイト「環境ジオポータル」のデータをQGISに直接読み込むためのプラグイン / A plugin for directly loading data from the "MOE GeoPortal," a geospatial information portal site provided by Japan's Ministry of the Environment, into QGIS
+about=This plugin allows you to directly load datasets published on MOE GeoPortal, a geospatial information portal operated by Japan's Ministry of the Environment. It targets datasets with the type "Feature Service" and licensed under CC BY 4.0. Each dataset has its own processing algorithm available in the Processing Toolbox. When you select a dataset and output destination, the file and style settings are automatically saved. You can also load data as an ArcGIS Feature Service layer if needed.
+description=A plugin for loading data from MOE GeoPortal, a geospatial information portal provided by Japan's Ministry of the Environment, directly into QGIS.
 version={{PLUGIN_VERSION}}
 
 supportsQt6=True

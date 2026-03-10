@@ -186,7 +186,12 @@ def _analyze_tile(b64_data: str, cache_key: str = "") -> PatternInfo:
             disp_x=0,
             marker=PIXEL_SIZE,
         )
-    img = img.convertToFormat(QImage.Format_ARGB32)
+    fmt = (
+        QImage.Format.Format_ARGB32
+        if hasattr(QImage, "Format")
+        else QImage.Format_ARGB32
+    )
+    img = img.convertToFormat(fmt)
 
     w = img.width()
     h = img.height()

@@ -1,6 +1,6 @@
 [project]
 name = "moe-geoportal-loader"
-version = "1.6.5"
+version = "1.6.6"
 description = ""
 authors = [
     {name = "Keita Uemori", email = "geo.jagaimo@gmail.com"},

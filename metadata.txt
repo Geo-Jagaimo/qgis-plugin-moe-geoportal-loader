@@ -6,7 +6,6 @@ about=This plugin allows you to directly load datasets published on MOE GeoPorta
 description=A plugin for loading data from MOE GeoPortal, a geospatial information portal provided by Japan's Ministry of the Environment, directly into QGIS.
 version={{PLUGIN_VERSION}}
 
-supportsQt6=True
 hasProcessingProvider=yes
 
 #Plugin main icon

@@ -1,7 +1,7 @@
 import unittest
 
 from data_loader.settings_datasets import DATASETS
-from data_loader.settings_prefecture import PREFECTURES
+from data_loader.settings_prefecture import PREFECTURE_NAMES_EN, PREFECTURES
 
 
 class TestDatasets(unittest.TestCase):
@@ -110,6 +110,7 @@ class TestDatasets(unittest.TestCase):
 
     def test_prefecture_placeholder_format(self):
         """Verify that URL prefecture placeholder has correct format"""
+        allowed_placeholders = {"{pref_code}", "{pref_name}"}
         for dataset_key, dataset in DATASETS.items():
             if dataset["has_prefecture"]:
                 with self.subTest(dataset=dataset_key):
@@ -121,16 +122,15 @@ class TestDatasets(unittest.TestCase):
                         1,
                         f"{dataset_key}: URL must contain exactly one {{pref_code}} placeholder",
                     )
-                    # Verify no other curly braces exist
+                    # Verify only allowed placeholders exist
+                    import re
+
+                    placeholders = set(re.findall(r"\{[^}]+\}", url))
+                    unexpected = placeholders - allowed_placeholders
                     self.assertEqual(
-                        url.count("{"),
-                        1,
-                        f"{dataset_key}: URL must not contain other placeholders",
-                    )
-                    self.assertEqual(
-                        url.count("}"),
-                        1,
-                        f"{dataset_key}: URL must not contain other placeholders",
+                        set(),
+                        unexpected,
+                        f"{dataset_key}: URL contains unexpected placeholders: {unexpected}",
                     )
 
 
@@ -223,7 +223,10 @@ class TestAlgorithmIntegration(unittest.TestCase):
                     # Verify that formatting works correctly for each prefecture code
                     for pref_code in ["01", "13", "47"]:
                         try:
-                            formatted_url = dataset["url"].format(pref_code=pref_code)
+                            pref_name = PREFECTURE_NAMES_EN.get(pref_code, "")
+                            formatted_url = dataset["url"].format(
+                                pref_code=pref_code, pref_name=pref_name
+                            )
                             self.assertNotIn(
                                 "{pref_code}",
                                 formatted_url,
@@ -250,7 +253,10 @@ class TestAlgorithmIntegration(unittest.TestCase):
             )
             # Verify that formatting works with Hokkaido code "01"
             url_template = dataset["url"]
-            formatted_url = url_template.format(pref_code="01_0420")
+            pref_name = PREFECTURE_NAMES_EN.get("01", "")
+            formatted_url = url_template.format(
+                pref_code="01_0420", pref_name=pref_name
+            )
             self.assertIn("01_0420", formatted_url)
 
     def test_dataset_count_reasonable(self):

@@ -4,11 +4,6 @@ DATASETS = {
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/vg_{pref_code}/FeatureServer",
         "has_prefecture": True,
     },
-    "vgsk_50000": {
-        "name": "自然度区分図（1/50,000）- 都道府県別",
-        "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/vgsk_{pref_code}/FeatureServer",
-        "has_prefecture": True,
-    },
     "veg2024bk1": {
         "name": "現存植生図2024 北海道ブロック",
         "url": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/veg2024bk1/FeatureServer",

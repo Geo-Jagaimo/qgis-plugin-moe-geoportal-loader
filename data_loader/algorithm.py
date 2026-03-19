@@ -25,7 +25,7 @@ from qgis.core import (
 from qgis.PyQt.QtCore import QCoreApplication
 
 from .settings_datasets import DATASETS
-from .settings_prefecture import PREFECTURES
+from .settings_prefecture import PREFECTURE_NAMES_EN, PREFECTURES
 
 
 class _StylePostProcessor(QgsProcessingLayerPostProcessorInterface):
@@ -134,12 +134,8 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         if has_prefecture:
             pref_idx = self.parameterAsEnum(parameters, self.PREFECTURE, context)
             pref_code = list(PREFECTURES.keys())[pref_idx]
-
-            # Handle specific URL for Hokkaido
-            if dataset_key == "vg_50000" and pref_code == "01":
-                pref_code = f"{pref_code}_0420"
-
-            url = url.format(pref_code=pref_code)
+            pref_name = PREFECTURE_NAMES_EN[pref_code]
+            url = url.format(pref_code=pref_code, pref_name=pref_name)
 
         feedback.pushInfo(f"Loading from: {url}")
 
@@ -452,18 +448,33 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             fd, qml_path = tempfile.mkstemp(suffix=".qml")
             os.close(fd)
 
+        # Use bundled QML if available
+        bundled_qml = self._get_bundled_qml(dataset_key)
+        if bundled_qml:
+            import shutil
+
+            shutil.copy2(bundled_qml, qml_path)
+            feedback.pushInfo(f"Using bundled style: {bundled_qml}")
+            from .style_converter import convert_rasterfill_qml
+
+            if convert_rasterfill_qml(qml_path):
+                feedback.pushInfo("Converted RasterFill to native symbols")
+            return qml_path
+
         res, err = vector_layer.saveNamedStyle(qml_path)
         if res:
             feedback.pushInfo(f"Saved style file: {qml_path}")
-            if dataset_key == "vg_50000":
-                from .style_converter import convert_rasterfill_qml
-
-                if convert_rasterfill_qml(qml_path):
-                    feedback.pushInfo("Converted RasterFill to native symbols")
             return qml_path
         else:
             feedback.reportError(f"Failed to save style to {qml_path}: {err}")
             return None
+
+    def _get_bundled_qml(self, dataset_key):
+        styles_dir = os.path.join(os.path.dirname(__file__), "styles")
+        qml_path = os.path.join(styles_dir, f"{dataset_key}.qml")
+        if os.path.exists(qml_path):
+            return qml_path
+        return None
 
     def _crs_from_esri_spatial_ref(self, spatial_ref, feedback):
         if not spatial_ref:

@@ -8,4 +8,3 @@ coverage.xml
 .coverage
 requirements.txt
 .ruff_cache/
-data_loader/styles/

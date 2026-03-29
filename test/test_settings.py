@@ -1,3 +1,4 @@
+import re
 import unittest
 
 from data_loader.settings_datasets import DATASETS
@@ -9,7 +10,6 @@ class TestDatasets(unittest.TestCase):
 
     def test_datasets_not_empty(self):
         """Verify that datasets are not empty"""
-        self.assertTrue(DATASETS, "DATASETS must not be empty")
         self.assertGreater(len(DATASETS), 0, "DATASETS must contain at least one entry")
 
     def test_dataset_required_keys(self):
@@ -87,16 +87,6 @@ class TestDatasets(unittest.TestCase):
                         f"{dataset_key}: Non-prefecture dataset must not include {{pref_code}} in URL",
                     )
 
-    def test_dataset_keys_unique(self):
-        """Verify that dataset keys are unique"""
-        keys = list(DATASETS.keys())
-        unique_keys = set(keys)
-        self.assertEqual(
-            len(keys),
-            len(unique_keys),
-            f"Dataset keys must be unique. Duplicates: {[k for k in keys if keys.count(k) > 1]}",
-        )
-
     def test_dataset_names_unique(self):
         """Verify that dataset names are unique"""
         names = [dataset["name"] for dataset in DATASETS.values()]
@@ -123,8 +113,6 @@ class TestDatasets(unittest.TestCase):
                         f"{dataset_key}: URL must contain exactly one {{pref_code}} placeholder",
                     )
                     # Verify only allowed placeholders exist
-                    import re
-
                     placeholders = set(re.findall(r"\{[^}]+\}", url))
                     unexpected = placeholders - allowed_placeholders
                     self.assertEqual(
@@ -139,7 +127,6 @@ class TestPrefectures(unittest.TestCase):
 
     def test_prefectures_not_empty(self):
         """Verify that prefecture data is not empty"""
-        self.assertTrue(PREFECTURES, "PREFECTURES must not be empty")
         self.assertEqual(
             len(PREFECTURES), 47, "PREFECTURES must contain exactly 47 entries"
         )
@@ -173,16 +160,6 @@ class TestPrefectures(unittest.TestCase):
             with self.subTest(code=code):
                 self.assertIsInstance(name, str, f"Name for {code} must be a string")
                 self.assertGreater(len(name), 0, f"Name for {code} must not be empty")
-
-    def test_prefecture_codes_unique(self):
-        """Verify that prefecture codes are unique"""
-        codes = list(PREFECTURES.keys())
-        unique_codes = set(codes)
-        self.assertEqual(
-            len(codes),
-            len(unique_codes),
-            "Prefecture codes must be unique",
-        )
 
     def test_prefecture_names_unique(self):
         """Verify that prefecture names are unique"""
@@ -285,6 +262,63 @@ class TestAlgorithmIntegration(unittest.TestCase):
             0,
             "Should have at least one non-prefecture dataset",
         )
+
+
+class TestPrefectureNamesEn(unittest.TestCase):
+    """Test PREFECTURE_NAMES_EN structure and consistency"""
+
+    def test_count_matches_prefectures(self):
+        """Verify that PREFECTURE_NAMES_EN has exactly 47 entries"""
+        self.assertEqual(
+            len(PREFECTURE_NAMES_EN),
+            47,
+            "PREFECTURE_NAMES_EN must contain exactly 47 entries",
+        )
+
+    def test_keys_match_prefectures(self):
+        """Verify that PREFECTURE_NAMES_EN keys match PREFECTURES keys"""
+        self.assertEqual(
+            set(PREFECTURE_NAMES_EN.keys()),
+            set(PREFECTURES.keys()),
+            "PREFECTURE_NAMES_EN keys must match PREFECTURES keys",
+        )
+
+    def test_values_are_ascii_lowercase(self):
+        """Verify that English names are lowercase ASCII strings"""
+        for code, name in PREFECTURE_NAMES_EN.items():
+            with self.subTest(code=code):
+                self.assertIsInstance(name, str, f"Name for {code} must be a string")
+                self.assertGreater(len(name), 0, f"Name for {code} must not be empty")
+                self.assertTrue(
+                    name.isascii() and name.islower(),
+                    f"Name for {code} ('{name}') must be lowercase ASCII",
+                )
+
+    def test_values_unique(self):
+        """Verify that English prefecture names are unique"""
+        names = list(PREFECTURE_NAMES_EN.values())
+        unique_names = set(names)
+        self.assertEqual(
+            len(names),
+            len(unique_names),
+            "PREFECTURE_NAMES_EN values must be unique",
+        )
+
+    def test_key_prefectures_en_present(self):
+        """Verify that key prefectures have correct English names"""
+        expected = {
+            "01": "hokkaido",
+            "13": "tokyo",
+            "27": "osaka",
+            "47": "okinawa",
+        }
+        for code, expected_name in expected.items():
+            with self.subTest(code=code):
+                self.assertEqual(
+                    PREFECTURE_NAMES_EN[code],
+                    expected_name,
+                    f"Prefecture code '{code}' must be '{expected_name}'",
+                )
 
 
 if __name__ == "__main__":

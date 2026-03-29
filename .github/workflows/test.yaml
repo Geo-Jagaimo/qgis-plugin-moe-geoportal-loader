@@ -18,19 +18,27 @@ jobs:
 
     strategy:
       matrix:
-        python-version: ["3.9", "3.10"]
+        qgis-version: ["3.44", "4.0"]
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
+      - name: Pull QGIS Docker image
+        run: docker pull ${DOCKER_IMAGE}:${{ matrix.qgis-version }}
 
       - name: Validate sources
-        run: python -m compileall plugin.py data_loader
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/app \
+            -w /app \
+            ${DOCKER_IMAGE}:${{ matrix.qgis-version }} \
+            python3 -m compileall plugin.py data_loader
 
       - name: Run unit tests
-        run: python -m unittest discover -s test -p "test_*.py"
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/app \
+            -w /app \
+            ${DOCKER_IMAGE}:${{ matrix.qgis-version }} \
+            python3 -m unittest discover -s test -p "test_*.py"

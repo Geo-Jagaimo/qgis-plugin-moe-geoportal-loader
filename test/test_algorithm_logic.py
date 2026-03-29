@@ -1,4 +1,5 @@
 import json
+import os
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -417,6 +418,117 @@ class TestCheckParameterValues(unittest.TestCase):
             ):
                 ok, msg = self.alg.checkParameterValues(parameters, self.context)
                 self.assertTrue(ok)
+
+
+class TestAlgorithmIdentity(unittest.TestCase):
+    """Tests for algorithm identity methods"""
+
+    def setUp(self):
+        self.alg = MOELoaderAlgorithm()
+
+    def test_name(self):
+        self.assertEqual(self.alg.name(), "moe_geoportal_loader")
+
+    def test_display_name(self):
+        self.assertIsInstance(self.alg.displayName(), str)
+        self.assertGreater(len(self.alg.displayName()), 0)
+
+    def test_group_is_none(self):
+        self.assertIsNone(self.alg.group())
+
+    def test_group_id_is_none(self):
+        self.assertIsNone(self.alg.groupId())
+
+    def test_create_instance(self):
+        instance = self.alg.createInstance()
+        self.assertIsInstance(instance, MOELoaderAlgorithm)
+        self.assertIsNot(instance, self.alg)
+
+    def test_short_help_string(self):
+        help_str = self.alg.shortHelpString()
+        self.assertIsInstance(help_str, str)
+        self.assertIn("geoportal", help_str.lower())
+
+
+class TestReportException(unittest.TestCase):
+    """Tests for MOELoaderAlgorithm._report_exception"""
+
+    def setUp(self):
+        self.alg = MOELoaderAlgorithm()
+        self.feedback = MagicMock()
+
+    def test_reports_error_and_traceback(self):
+        try:
+            raise ValueError("test error")
+        except ValueError as e:
+            self.alg._report_exception(self.feedback, "Something failed", e)
+        self.assertEqual(self.feedback.reportError.call_count, 2)
+        first_call = self.feedback.reportError.call_args_list[0][0][0]
+        self.assertIn("Something failed", first_call)
+        self.assertIn("test error", first_call)
+
+
+class TestGetBundledQml(unittest.TestCase):
+    """Tests for MOELoaderAlgorithm._get_bundled_qml"""
+
+    def setUp(self):
+        self.alg = MOELoaderAlgorithm()
+
+    def test_returns_none_for_nonexistent_key(self):
+        result = self.alg._get_bundled_qml("nonexistent_dataset_key_xyz")
+        self.assertIsNone(result)
+
+    def test_returns_path_for_existing_style(self):
+        styles_dir = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "data_loader", "styles"
+        )
+        if os.path.isdir(styles_dir):
+            qml_files = [f for f in os.listdir(styles_dir) if f.endswith(".qml")]
+            if qml_files:
+                key = qml_files[0].replace(".qml", "")
+                result = self.alg._get_bundled_qml(key)
+                self.assertIsNotNone(result)
+                self.assertTrue(os.path.exists(result))  # type: ignore
+
+    def test_returns_none_for_none_key(self):
+        result = self.alg._get_bundled_qml(None)
+        self.assertIsNone(result)
+
+
+class TestCreateArcgisVectorLayer(unittest.TestCase):
+    """Tests for MOELoaderAlgorithm._create_arcgis_vector_layer"""
+
+    def setUp(self):
+        self.alg = MOELoaderAlgorithm()
+        self.feedback = MagicMock()
+
+    @patch("data_loader.algorithm.QgsVectorLayer")
+    def test_returns_layer_when_valid(self, mock_layer_cls):
+        mock_layer = MagicMock()
+        mock_layer.isValid.return_value = True
+        mock_layer_cls.return_value = mock_layer
+
+        result = self.alg._create_arcgis_vector_layer(
+            "https://example.com/FeatureServer/0", "test_layer", self.feedback
+        )
+        self.assertIsNotNone(result)
+        mock_layer_cls.assert_called_once_with(
+            "url='https://example.com/FeatureServer/0'",
+            "test_layer",
+            "arcgisfeatureserver",
+        )
+
+    @patch("data_loader.algorithm.QgsVectorLayer")
+    def test_returns_none_when_invalid(self, mock_layer_cls):
+        mock_layer = MagicMock()
+        mock_layer.isValid.return_value = False
+        mock_layer_cls.return_value = mock_layer
+
+        result = self.alg._create_arcgis_vector_layer(
+            "https://example.com/FeatureServer/0", "test_layer", self.feedback
+        )
+        self.assertIsNone(result)
+        self.feedback.reportError.assert_called_once()
 
 
 if __name__ == "__main__":

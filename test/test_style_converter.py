@@ -1,10 +1,22 @@
 import base64
+import os
+import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 
 from qgis.PyQt.QtCore import QBuffer, QByteArray, QIODevice
 from qgis.PyQt.QtGui import QColor, QImage
 
-from data_loader.style_converter import PIXEL_SIZE, _analyze_tile
+from data_loader.style_converter import (
+    PIXEL_SIZE,
+    _analyze_tile,
+    _build_line_pattern_fill_layer,
+    _build_point_pattern_fill_layer,
+    _build_simple_fill_layer,
+    _convert_pattern_to_layers,
+    _rgba_to_qgis,
+    convert_rasterfill_qml,
+)
 
 
 def _make_tile_b64(width, height, bg_color, fg_pixels=None, extra_pixels=None):
@@ -340,6 +352,335 @@ class TestAnalyzeTileColorExtraction(unittest.TestCase):
         info = _analyze_tile(b64)
         self.assertGreaterEqual(info["num_colors"], 3)  # type: ignore
         self.assertIn("third", info)
+
+
+class TestRgbaToQgis(unittest.TestCase):
+    """Tests for _rgba_to_qgis color conversion"""
+
+    def test_opaque_black(self):
+        result = _rgba_to_qgis((0, 0, 0, 255))
+        self.assertTrue(result.startswith("0,0,0,255,rgb:"))
+
+    def test_opaque_white(self):
+        result = _rgba_to_qgis((255, 255, 255, 255))
+        self.assertTrue(result.startswith("255,255,255,255,rgb:"))
+
+    def test_transparent(self):
+        result = _rgba_to_qgis((0, 0, 0, 0))
+        self.assertTrue(result.startswith("0,0,0,0,rgb:"))
+
+    def test_mid_color(self):
+        result = _rgba_to_qgis((128, 64, 32, 200))
+        parts = result.split(",rgb:")
+        self.assertEqual(parts[0], "128,64,32,200")
+
+    def test_output_format(self):
+        result = _rgba_to_qgis((100, 50, 25, 255))
+        self.assertIn(",rgb:", result)
+        csv_part, rgb_part = result.split(",rgb:")
+        self.assertEqual(len(csv_part.split(",")), 4)
+        self.assertEqual(len(rgb_part.split(",")), 4)
+
+
+class TestBuildSimpleFillLayer(unittest.TestCase):
+    """Tests for _build_simple_fill_layer"""
+
+    def test_returns_element(self):
+        layer = _build_simple_fill_layer("0,0,0,255,rgb:0,0,0,1")
+        self.assertIsInstance(layer, ET.Element)
+        self.assertEqual(layer.get("class"), "SimpleFill")
+
+    def test_color_set(self):
+        color = "128,64,32,255,rgb:0.5,0.25,0.125,1"
+        layer = _build_simple_fill_layer(color)
+        opt = layer.find("Option")
+        color_opt = opt.find("Option[@name='color']")  # type: ignore
+        self.assertEqual(color_opt.get("value"), color)  # type: ignore
+
+    def test_outline_style(self):
+        layer = _build_simple_fill_layer("0,0,0,255,rgb:0,0,0,1", outline="solid")
+        opt = layer.find("Option")
+        outline = opt.find("Option[@name='outline_style']")  # type: ignore
+        self.assertEqual(outline.get("value"), "solid")  # type: ignore
+
+    def test_fill_style(self):
+        layer = _build_simple_fill_layer("0,0,0,255,rgb:0,0,0,1", style="no")
+        opt = layer.find("Option")
+        style = opt.find("Option[@name='style']")  # type: ignore
+        self.assertEqual(style.get("value"), "no")  # type: ignore
+
+
+class TestBuildPointPatternFillLayer(unittest.TestCase):
+    """Tests for _build_point_pattern_fill_layer"""
+
+    def test_returns_element(self):
+        info = {
+            "dx": 3,
+            "dy": 3,
+            "disp_x": 0,
+            "marker": 0.75,
+            "fg_qgis": "0,0,0,255,rgb:0,0,0,1",
+        }
+        layer = _build_point_pattern_fill_layer("sym0", 1, info)
+        self.assertEqual(layer.get("class"), "PointPatternFill")
+
+    def test_contains_marker_symbol(self):
+        info = {
+            "dx": 3,
+            "dy": 3,
+            "disp_x": 0,
+            "marker": 0.75,
+            "fg_qgis": "0,0,0,255,rgb:0,0,0,1",
+        }
+        layer = _build_point_pattern_fill_layer("sym0", 1, info)
+        marker_sym = layer.find("symbol[@type='marker']")
+        self.assertIsNotNone(marker_sym)
+        self.assertEqual(marker_sym.get("name"), "@sym0@1")  # type: ignore
+
+    def test_explicit_params_override_info(self):
+        info = {
+            "dx": 3,
+            "dy": 3,
+            "disp_x": 0,
+            "marker": 0.75,
+            "fg_qgis": "0,0,0,255,rgb:0,0,0,1",
+        }
+        layer = _build_point_pattern_fill_layer(
+            "sym0", 1, info, dx=5, dy=6, disp_x=1, marker_size=2
+        )
+        opt = layer.find("Option")
+        dx_opt = opt.find("Option[@name='distance_x']")  # type: ignore
+        dy_opt = opt.find("Option[@name='distance_y']")  # type: ignore
+        self.assertEqual(dx_opt.get("value"), "5")  # type: ignore
+        self.assertEqual(dy_opt.get("value"), "6")  # type: ignore
+
+
+class TestBuildLinePatternFillLayer(unittest.TestCase):
+    """Tests for _build_line_pattern_fill_layer"""
+
+    def test_returns_element(self):
+        layer = _build_line_pattern_fill_layer(
+            "sym0", 1, 45, 5.3, 2.25, "0,0,0,255,rgb:0,0,0,1"
+        )
+        self.assertEqual(layer.get("class"), "LinePatternFill")
+
+    def test_contains_line_symbol(self):
+        layer = _build_line_pattern_fill_layer(
+            "sym0", 2, 135, 5.3, 2.25, "0,0,0,255,rgb:0,0,0,1"
+        )
+        line_sym = layer.find("symbol[@type='line']")
+        self.assertIsNotNone(line_sym)
+        self.assertEqual(line_sym.get("name"), "@sym0@2")  # type: ignore
+
+    def test_angle_and_distance(self):
+        layer = _build_line_pattern_fill_layer(
+            "sym0", 1, 45, 5.3, 2.25, "0,0,0,255,rgb:0,0,0,1"
+        )
+        opt = layer.find("Option")
+        angle = opt.find("Option[@name='angle']")  # type: ignore
+        dist = opt.find("Option[@name='distance']")  # type: ignore
+        self.assertEqual(angle.get("value"), "45")  # type: ignore
+        self.assertEqual(dist.get("value"), "5.3")  # type: ignore
+
+
+class TestConvertPatternToLayers(unittest.TestCase):
+    """Tests for _convert_pattern_to_layers"""
+
+    def _make_info(self, ptype, **kwargs):
+        base = {
+            "type": ptype,
+            "bg_qgis": "255,255,255,255,rgb:1,1,1,1",
+            "fg_qgis": "0,0,0,255,rgb:0,0,0,1",
+            "dx": 3,
+            "dy": 3,
+            "disp_x": 0,
+            "marker": PIXEL_SIZE,
+        }
+        base.update(kwargs)
+        return base
+
+    def test_dot_grid_produces_two_layers(self):
+        info = self._make_info("dot_grid")
+        layers = _convert_pattern_to_layers("sym0", info)
+        self.assertEqual(len(layers), 2)
+        self.assertEqual(layers[0].get("class"), "SimpleFill")
+        self.assertEqual(layers[1].get("class"), "PointPatternFill")
+
+    def test_dot_staggered_produces_two_layers(self):
+        info = self._make_info("dot_staggered")
+        layers = _convert_pattern_to_layers("sym0", info)
+        self.assertEqual(len(layers), 2)
+
+    def test_dot_grid_plus_produces_three_layers(self):
+        info = self._make_info(
+            "dot_grid_plus",
+            extra_dx=4 * PIXEL_SIZE,
+            extra_dy=4 * PIXEL_SIZE,
+            extra_disp_x=0,
+            extra_offset_x=1 * PIXEL_SIZE,
+            extra_offset_y=3 * PIXEL_SIZE,
+        )
+        layers = _convert_pattern_to_layers("sym0", info)
+        self.assertEqual(len(layers), 3)
+        self.assertEqual(layers[1].get("class"), "PointPatternFill")
+        self.assertEqual(layers[2].get("class"), "PointPatternFill")
+
+    def test_diamond_hatch_produces_three_layers(self):
+        info = self._make_info("diamond_hatch", line_distance=5.3, line_width=2.25)
+        layers = _convert_pattern_to_layers("sym0", info)
+        self.assertEqual(len(layers), 3)
+        self.assertEqual(layers[0].get("class"), "SimpleFill")
+        self.assertEqual(layers[1].get("class"), "LinePatternFill")
+        self.assertEqual(layers[2].get("class"), "LinePatternFill")
+
+    def test_diamond_hatch_bg_uses_fg_color(self):
+        info = self._make_info("diamond_hatch", line_distance=5.3, line_width=2.25)
+        layers = _convert_pattern_to_layers("sym0", info)
+        bg_opt = layers[0].find("Option/Option[@name='color']")
+        self.assertEqual(bg_opt.get("value"), info["fg_qgis"])  # type: ignore
+
+    def test_semi_transparent_hatch_produces_two_layers(self):
+        info = self._make_info(
+            "semi_transparent_hatch", line_distance=3.75, line_width=0.75
+        )
+        layers = _convert_pattern_to_layers("sym0", info)
+        self.assertEqual(len(layers), 2)
+        self.assertEqual(layers[1].get("class"), "LinePatternFill")
+
+    def test_tricolor_dot_with_third_color(self):
+        info = self._make_info(
+            "tricolor_dot",
+            dx=6,
+            dy=6,
+            disp_x=3,
+            marker=1.5,
+            third_qgis="100,0,0,255,rgb:0.39,0,0,1",
+        )
+        layers = _convert_pattern_to_layers("sym0", info)
+        self.assertEqual(len(layers), 3)
+        self.assertEqual(layers[1].get("class"), "PointPatternFill")
+        self.assertEqual(layers[2].get("class"), "PointPatternFill")
+
+    def test_tricolor_dot_without_third_color(self):
+        info = self._make_info("tricolor_dot", dx=6, dy=6, disp_x=3, marker=1.5)
+        layers = _convert_pattern_to_layers("sym0", info)
+        self.assertEqual(len(layers), 2)
+
+    def test_dot_sparse_pair_produces_two_layers(self):
+        info = self._make_info("dot_sparse_pair")
+        layers = _convert_pattern_to_layers("sym0", info)
+        self.assertEqual(len(layers), 2)
+
+
+class TestConvertRasterfillQml(unittest.TestCase):
+    """Tests for convert_rasterfill_qml (public entry point)"""
+
+    def _make_b64_tile(self):
+        fmt = (
+            QImage.Format.Format_ARGB32
+            if hasattr(QImage, "Format")
+            else QImage.Format_ARGB32
+        )
+        img = QImage(12, 12, fmt)
+        img.fill(QColor(255, 255, 255, 255))
+        img.setPixelColor(0, 0, QColor(0, 0, 0, 255))
+        ba = QByteArray()
+        buf = QBuffer(ba)
+        buf.open(
+            QIODevice.OpenModeFlag.WriteOnly
+            if hasattr(QIODevice, "OpenModeFlag")
+            else QIODevice.WriteOnly
+        )
+        img.save(buf, "PNG")
+        buf.close()
+        return base64.b64encode(bytes(ba)).decode("ascii")
+
+    def _write_qml(self, content):
+        fd, path = tempfile.mkstemp(suffix=".qml")
+        os.close(fd)
+        with open(path, "w") as f:
+            f.write(content)
+        return path
+
+    def test_converts_rasterfill_symbol(self):
+        b64 = self._make_b64_tile()
+        qml = f"""<qgis>
+  <renderer-v2>
+    <symbols>
+      <symbol name="0" type="fill">
+        <layer class="RasterFill" enabled="1" pass="0" locked="0" id="test">
+          <Option type="Map">
+            <Option name="imageFile" value="base64:{b64}" type="QString"/>
+          </Option>
+        </layer>
+      </symbol>
+    </symbols>
+  </renderer-v2>
+</qgis>"""
+        path = self._write_qml(qml)
+        try:
+            result = convert_rasterfill_qml(path)
+            self.assertTrue(result)
+            tree = ET.parse(path)
+            root = tree.getroot()
+            raster_layers = root.findall(".//layer[@class='RasterFill']")
+            self.assertEqual(len(raster_layers), 0)
+            simple_fills = root.findall(".//layer[@class='SimpleFill']")
+            self.assertGreater(len(simple_fills), 0)
+        finally:
+            os.unlink(path)
+
+    def test_returns_false_no_symbols(self):
+        qml = "<qgis><renderer-v2></renderer-v2></qgis>"
+        path = self._write_qml(qml)
+        try:
+            result = convert_rasterfill_qml(path)
+            self.assertFalse(result)
+        finally:
+            os.unlink(path)
+
+    def test_returns_false_no_rasterfill(self):
+        qml = """<qgis>
+  <renderer-v2>
+    <symbols>
+      <symbol name="0" type="fill">
+        <layer class="SimpleFill" enabled="1" pass="0" locked="0" id="test">
+          <Option type="Map"/>
+        </layer>
+      </symbol>
+    </symbols>
+  </renderer-v2>
+</qgis>"""
+        path = self._write_qml(qml)
+        try:
+            result = convert_rasterfill_qml(path)
+            self.assertFalse(result)
+        finally:
+            os.unlink(path)
+
+    def test_prepends_doctype(self):
+        b64 = self._make_b64_tile()
+        qml = f"""<qgis>
+  <renderer-v2>
+    <symbols>
+      <symbol name="0" type="fill">
+        <layer class="RasterFill" enabled="1" pass="0" locked="0" id="test">
+          <Option type="Map">
+            <Option name="imageFile" value="base64:{b64}" type="QString"/>
+          </Option>
+        </layer>
+      </symbol>
+    </symbols>
+  </renderer-v2>
+</qgis>"""
+        path = self._write_qml(qml)
+        try:
+            convert_rasterfill_qml(path)
+            with open(path) as f:
+                first_line = f.readline()
+            self.assertIn("<!DOCTYPE qgis", first_line)
+        finally:
+            os.unlink(path)
 
 
 if __name__ == "__main__":

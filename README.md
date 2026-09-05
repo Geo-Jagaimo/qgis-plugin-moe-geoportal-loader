@@ -67,7 +67,7 @@
 
 ## Requirements
 
-- QGIS 3.40 or later
+- QGIS 3.44 or later
 
 ## License
 

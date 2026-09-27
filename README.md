@@ -4,6 +4,8 @@
 [![MOE GeoPortal](https://img.shields.io/badge/MOE_GeoPortal-forestgreen)](https://geoportal.env.go.jp/)
 [![QGIS Plugin Repository](https://img.shields.io/badge/QGIS_Plugin_Repository-green)](https://plugins.qgis.org/plugins/moe_geoportal_loader/)
 
+![](imgs/icon.png)
+
 ## Overview
 
 - This plugin allows you to directly load datasets published on [MOE GeoPortal](https://geoportal.env.go.jp/), a geospatial information portal operated by Japan's Ministry of the Environment, into QGIS.

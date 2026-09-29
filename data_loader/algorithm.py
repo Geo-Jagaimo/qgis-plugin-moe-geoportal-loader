@@ -177,7 +177,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         try:
             if not url.startswith(("https://", "http://")):
                 raise ValueError(f"Unsupported URL scheme: {url}")
-            with urlopen(url) as response:  # noqa: S310  # nosec B310 - scheme validated above
+            with urlopen(url) as response:  # noqa: S310  # nosec B310  # scheme validated above
                 return json.loads(response.read().decode())
         except Exception as e:
             feedback.reportError(f"{error_context}: {str(e)}")

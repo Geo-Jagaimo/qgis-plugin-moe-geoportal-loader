@@ -314,6 +314,24 @@ class TestFetchJson(unittest.TestCase):
             )
             self.assertEqual(result, {"ok": True})
 
+    @patch("data_loader.algorithm.urlopen")
+    def test_arcgis_error_response_returns_none(self, mock_urlopen):
+        body = {"error": {"code": 499, "message": "Token Required"}}
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps(body).encode()
+        mock_response.__enter__ = MagicMock(return_value=mock_response)
+        mock_response.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = mock_response
+
+        result = self.alg._fetch_json(
+            "https://example.com/api", self.feedback, "error context"
+        )
+        self.assertIsNone(result)
+        self.assertIn(
+            "error context: 499 Token Required",
+            self.feedback.reportError.call_args[0][0],
+        )
+
 
 class TestResolveLayerUrlAndMeta(unittest.TestCase):
     """Tests for MOELoaderAlgorithm._resolve_layer_url_and_meta"""

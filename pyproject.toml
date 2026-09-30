@@ -4,7 +4,7 @@ name = "moe-geoportal-loader"
 version = "0.0.0"
 description = ""
 authors = [
-    {name = "Keita Uemori", email = "geo.jagaimo@gmail.com"},
+    {name = "Keita Uemori", email = "salamanderezo@gmail.com"},
 ]
 readme = "README.md"
 requires-python = ">=3.9"

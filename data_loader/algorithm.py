@@ -178,10 +178,19 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             if not url.startswith(("https://", "http://")):
                 raise ValueError(f"Unsupported URL scheme: {url}")
             with urlopen(url) as response:  # noqa: S310  # nosec B310  # scheme validated above
-                return json.loads(response.read().decode())
+                data = json.loads(response.read().decode())
         except Exception as e:
             feedback.reportError(f"{error_context}: {str(e)}")
             return None
+
+        # ArcGIS reports errors such as "499 Token Required" in the JSON body
+        error = data.get("error") if isinstance(data, dict) else None
+        if error:
+            feedback.reportError(
+                f"{error_context}: {error.get('code')} {error.get('message')}"
+            )
+            return None
+        return data
 
     def _resolve_layer_url_and_meta(self, url, feedback):
         service_meta = self._fetch_json(

@@ -12,7 +12,7 @@ import base64
 import hashlib
 import uuid
 
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET  # nosec B405  # parses bundled QML only
 
 try:
     from defusedxml.ElementTree import parse as _safe_parse  # type: ignore[import-not-found]
@@ -128,7 +128,7 @@ def convert_rasterfill_qml(qml_path: str) -> bool:
         f"Converted {converted} RasterFill symbol(s) "
         f"({len(pattern_cache)} unique pattern(s))",
         _LOG_TAG,
-        Qgis.Info,
+        Qgis.MessageLevel.Info,
     )
     return True
 
@@ -157,6 +157,19 @@ def _make_data_defined_properties() -> ET.Element:
     return ddp
 
 
+def _new_symbol_layer(layer_class: str) -> ET.Element:
+    return ET.Element(
+        "layer",
+        {
+            "pass": "0",  # nosec B105  # QGIS rendering pass, not a password
+            "locked": "0",
+            "class": layer_class,
+            "enabled": "1",
+            "id": _new_uuid(),
+        },
+    )
+
+
 # ===========================================================================
 # Tile pattern analysis (Qt QImage based)
 # ===========================================================================
@@ -170,7 +183,7 @@ def _analyze_tile(b64_data: str, cache_key: str = "") -> PatternInfo:
         QgsMessageLog.logMessage(
             f"Failed to decode tile image (cache_key={cache_key})",
             _LOG_TAG,
-            Qgis.Warning,
+            Qgis.MessageLevel.Warning,
         )
         return PatternInfo(
             type="dot_grid",
@@ -186,12 +199,7 @@ def _analyze_tile(b64_data: str, cache_key: str = "") -> PatternInfo:
             disp_x=0,
             marker=PIXEL_SIZE,
         )
-    fmt = (
-        QImage.Format.Format_ARGB32
-        if hasattr(QImage, "Format")
-        else QImage.Format_ARGB32
-    )
-    img = img.convertToFormat(fmt)
+    img = img.convertToFormat(QImage.Format.Format_ARGB32)
 
     w = img.width()
     h = img.height()
@@ -369,16 +377,7 @@ def _analyze_tile(b64_data: str, cache_key: str = "") -> PatternInfo:
 
 
 def _build_simple_fill_layer(color_qgis, outline="no", style="solid"):
-    layer = ET.Element(
-        "layer",
-        {
-            "pass": "0",
-            "locked": "0",
-            "class": "SimpleFill",
-            "enabled": "1",
-            "id": _new_uuid(),
-        },
-    )
+    layer = _new_symbol_layer("SimpleFill")
     opt = ET.SubElement(layer, "Option", type="Map")
     ET.SubElement(
         opt,
@@ -429,16 +428,7 @@ def _build_point_pattern_fill_layer(
     marker_size = marker_size or info.get("marker", PIXEL_SIZE)
     color_qgis = color_qgis or info["fg_qgis"]
 
-    layer = ET.Element(
-        "layer",
-        {
-            "pass": "0",
-            "locked": "0",
-            "class": "PointPatternFill",
-            "enabled": "1",
-            "id": _new_uuid(),
-        },
-    )
+    layer = _new_symbol_layer("PointPatternFill")
     opt = ET.SubElement(layer, "Option", type="Map")
 
     params = [
@@ -495,17 +485,8 @@ def _build_point_pattern_fill_layer(
     )
     marker_sym.append(_make_data_defined_properties())
 
-    marker_layer = ET.SubElement(
-        marker_sym,
-        "layer",
-        {
-            "pass": "0",
-            "locked": "0",
-            "class": "SimpleMarker",
-            "enabled": "1",
-            "id": _new_uuid(),
-        },
-    )
+    marker_layer = _new_symbol_layer("SimpleMarker")
+    marker_sym.append(marker_layer)
     mopt = ET.SubElement(marker_layer, "Option", type="Map")
     marker_params = [
         ("angle", "0"),
@@ -538,16 +519,7 @@ def _build_point_pattern_fill_layer(
 def _build_line_pattern_fill_layer(
     sym_name, layer_idx, angle, distance, line_width, color_qgis
 ):
-    layer = ET.Element(
-        "layer",
-        {
-            "pass": "0",
-            "locked": "0",
-            "class": "LinePatternFill",
-            "enabled": "1",
-            "id": _new_uuid(),
-        },
-    )
+    layer = _new_symbol_layer("LinePatternFill")
     opt = ET.SubElement(layer, "Option", type="Map")
     params = [
         ("angle", str(angle)),
@@ -584,17 +556,8 @@ def _build_line_pattern_fill_layer(
     )
     line_sym.append(_make_data_defined_properties())
 
-    line_layer = ET.SubElement(
-        line_sym,
-        "layer",
-        {
-            "pass": "0",
-            "locked": "0",
-            "class": "SimpleLine",
-            "enabled": "1",
-            "id": _new_uuid(),
-        },
-    )
+    line_layer = _new_symbol_layer("SimpleLine")
+    line_sym.append(line_layer)
     lopt = ET.SubElement(line_layer, "Option", type="Map")
     line_params = [
         ("align_dash_pattern", "0"),

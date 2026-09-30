@@ -222,9 +222,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             return None
         return vector_layer
 
-    def _set_vector_layer_crs(
-        self, vector_layer, service_meta, layer_meta, parameters, context, feedback
-    ):
+    def _set_vector_layer_crs(self, vector_layer, service_meta, layer_meta, feedback):
         extent_ref = (layer_meta.get("extent") or {}).get("spatialReference")
         layer_ref = layer_meta.get("spatialReference")
         service_ref = service_meta.get("spatialReference", {})
@@ -232,13 +230,9 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
         esri_crs = self._crs_from_esri_spatial_ref(spatial_ref, feedback)
 
-        # Prioritize the CRS specified by the user
-        param_crs = self.parameterAsCrs(parameters, self.CRS, context)
-
-        if param_crs and param_crs.isValid():
-            layer_crs = param_crs
-            feedback.pushInfo(f"Using user-specified CRS: {layer_crs.authid()}")
-        elif esri_crs and esri_crs.isValid():
+        # Only the CRS the service data is in: setCrs() relabels coordinates
+        # without reprojecting them, so the user-specified CRS must not go here.
+        if esri_crs and esri_crs.isValid():
             layer_crs = esri_crs
             feedback.pushInfo(f"Using ESRI-defined CRS: {layer_crs.authid()}")
         else:
@@ -280,14 +274,14 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             if vector_layer is None:
                 return None
 
-            self._set_vector_layer_crs(
-                vector_layer,
-                service_meta,
-                layer_meta,
-                parameters,
-                context,
-                feedback,
-            )
+            self._set_vector_layer_crs(vector_layer, service_meta, layer_meta, feedback)
+
+            param_crs = self.parameterAsCrs(parameters, self.CRS, context)
+            if param_crs.isValid() and param_crs != vector_layer.crs():
+                feedback.pushWarning(
+                    f"Output CRS {param_crs.authid()} is not applied to ArcGIS "
+                    "layers; QGIS reprojects them on the fly."
+                )
 
             QgsProject.instance().addMapLayer(vector_layer)
             feedback.pushInfo(f"Successfully loaded layer: {layer_name}")
@@ -317,14 +311,26 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         if vector_layer is None:
             return None
 
-        self._set_vector_layer_crs(
-            vector_layer,
-            service_meta,
-            layer_meta,
-            parameters,
-            context,
-            feedback,
-        )
+        self._set_vector_layer_crs(vector_layer, service_meta, layer_meta, feedback)
+
+        source_crs = vector_layer.crs()
+        param_crs = self.parameterAsCrs(parameters, self.CRS, context)
+        if param_crs.isValid() and param_crs != source_crs:
+            if not source_crs.isValid():
+                feedback.reportError(
+                    "Cannot reproject to the output CRS: the source CRS is unknown."
+                )
+                return None
+            final_output_crs = param_crs
+            feedback.pushInfo(
+                f"Reprojecting on save: {source_crs.authid()} → {final_output_crs.authid()}"
+            )
+            transform = QgsCoordinateTransform(
+                source_crs, final_output_crs, context.transformContext()
+            )
+        else:
+            final_output_crs = source_crs
+            transform = None
 
         cleaned_fields = QgsFields()
         for field in vector_layer.fields():
@@ -332,8 +338,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             new_field.setAlias("")
             new_field.setComment("")
             cleaned_fields.append(new_field)
-
-        final_output_crs = vector_layer.crs()
 
         (sink, dest_id) = self.parameterAsSink(
             parameters,
@@ -356,21 +360,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         feedback.pushInfo(f"Writing {total} features to output...")
 
         processed = 0
-        needs_transform = final_output_crs.isValid() and (
-            final_output_crs.authid() != vector_layer.crs().authid()
-        )
-        if needs_transform:
-            feedback.pushInfo(
-                f"Reprojecting on save: {vector_layer.crs().authid()} → {final_output_crs.authid()}"
-            )
-            transform = QgsCoordinateTransform(
-                vector_layer.crs(),
-                final_output_crs,
-                QgsProject.instance().transformContext(),
-            )
-        else:
-            transform = None
-
         for feature in vector_layer.getFeatures():
             if feedback.isCanceled():
                 break
@@ -382,7 +371,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                         geom.transform(transform)
                         new_f.setGeometry(geom)
                 except Exception as e:
-                    feedback.pushInfo(
+                    feedback.pushWarning(
                         f"Skipping feature due to transform error: {str(e)}"
                     )
                     continue

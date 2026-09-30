@@ -128,7 +128,7 @@ def convert_rasterfill_qml(qml_path: str) -> bool:
         f"Converted {converted} RasterFill symbol(s) "
         f"({len(pattern_cache)} unique pattern(s))",
         _LOG_TAG,
-        Qgis.Info,
+        Qgis.MessageLevel.Info,
     )
     return True
 
@@ -183,7 +183,7 @@ def _analyze_tile(b64_data: str, cache_key: str = "") -> PatternInfo:
         QgsMessageLog.logMessage(
             f"Failed to decode tile image (cache_key={cache_key})",
             _LOG_TAG,
-            Qgis.Warning,
+            Qgis.MessageLevel.Warning,
         )
         return PatternInfo(
             type="dot_grid",
@@ -199,12 +199,7 @@ def _analyze_tile(b64_data: str, cache_key: str = "") -> PatternInfo:
             disp_x=0,
             marker=PIXEL_SIZE,
         )
-    fmt = (
-        QImage.Format.Format_ARGB32
-        if hasattr(QImage, "Format")
-        else QImage.Format_ARGB32
-    )
-    img = img.convertToFormat(fmt)
+    img = img.convertToFormat(QImage.Format.Format_ARGB32)
 
     w = img.width()
     h = img.height()

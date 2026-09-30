@@ -29,12 +29,7 @@ def _make_tile_b64(width, height, bg_color, fg_pixels=None, extra_pixels=None):
         fg_pixels: List of (x, y) tuples for foreground pixels (black by default)
         extra_pixels: List of (x, y, QColor) tuples for additional colored pixels
     """
-    fmt = (
-        QImage.Format.Format_ARGB32
-        if hasattr(QImage, "Format")
-        else QImage.Format_ARGB32
-    )
-    img = QImage(width, height, fmt)
+    img = QImage(width, height, QImage.Format.Format_ARGB32)
     img.fill(bg_color)
 
     if fg_pixels:
@@ -47,11 +42,7 @@ def _make_tile_b64(width, height, bg_color, fg_pixels=None, extra_pixels=None):
 
     ba = QByteArray()
     buf = QBuffer(ba)
-    buf.open(
-        QIODevice.OpenModeFlag.WriteOnly
-        if hasattr(QIODevice, "OpenModeFlag")
-        else QIODevice.WriteOnly
-    )
+    buf.open(QIODevice.OpenModeFlag.WriteOnly)
     img.save(buf, "PNG")
     buf.close()
 
@@ -576,21 +567,12 @@ class TestConvertRasterfillQml(unittest.TestCase):
     """Tests for convert_rasterfill_qml (public entry point)"""
 
     def _make_b64_tile(self):
-        fmt = (
-            QImage.Format.Format_ARGB32
-            if hasattr(QImage, "Format")
-            else QImage.Format_ARGB32
-        )
-        img = QImage(12, 12, fmt)
+        img = QImage(12, 12, QImage.Format.Format_ARGB32)
         img.fill(QColor(255, 255, 255, 255))
         img.setPixelColor(0, 0, QColor(0, 0, 0, 255))
         ba = QByteArray()
         buf = QBuffer(ba)
-        buf.open(
-            QIODevice.OpenModeFlag.WriteOnly
-            if hasattr(QIODevice, "OpenModeFlag")
-            else QIODevice.WriteOnly
-        )
+        buf.open(QIODevice.OpenModeFlag.WriteOnly)
         img.save(buf, "PNG")
         buf.close()
         return base64.b64encode(bytes(ba)).decode("ascii")

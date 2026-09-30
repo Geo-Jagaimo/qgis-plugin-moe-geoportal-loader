@@ -342,7 +342,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             cleaned_fields,
             vector_layer.wkbType(),
             final_output_crs,
-            QgsFeatureSink.SinkFlags(),
         )
 
         if sink is None:
@@ -387,7 +386,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                         f"Skipping feature due to transform error: {str(e)}"
                     )
                     continue
-            sink.addFeature(new_f, QgsFeatureSink.FastInsert)
+            sink.addFeature(new_f, QgsFeatureSink.Flag.FastInsert)
             processed += 1
             if total > 0:
                 feedback.setProgress(int((processed / total) * 100))

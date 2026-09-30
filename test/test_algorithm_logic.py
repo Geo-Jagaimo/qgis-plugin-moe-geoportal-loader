@@ -3,7 +3,18 @@ import os
 import unittest
 from unittest.mock import MagicMock, patch
 
-from qgis.core import QgsCoordinateReferenceSystem
+from qgis.core import (
+    QgsCoordinateReferenceSystem,
+    QgsCoordinateTransform,
+    QgsCoordinateTransformContext,
+    QgsFeature,
+    QgsGeometry,
+    QgsPointXY,
+    QgsProcessingContext,
+    QgsProject,
+    QgsVectorLayer,
+)
+from qgis.testing import start_app
 
 from data_loader.algorithm import MOELoaderAlgorithm
 from data_loader.settings_prefecture import PREFECTURES
@@ -529,6 +540,102 @@ class TestCreateArcgisVectorLayer(unittest.TestCase):
         )
         self.assertIsNone(result)
         self.feedback.reportError.assert_called_once()
+
+
+class TestOutputCrs(unittest.TestCase):
+    """The CRS parameter must reproject saved features, never relabel them."""
+
+    # so4 is served in JGD2000 geographic coordinates
+    SOURCE_CRS = "EPSG:4612"
+    SOURCE_X, SOURCE_Y = 139.871853, 33.170186
+
+    @classmethod
+    def setUpClass(cls):
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        start_app()
+        if not QgsCoordinateReferenceSystem("EPSG:6691").isValid():
+            raise unittest.SkipTest("PROJ database not available")
+
+    def setUp(self):
+        self.alg = MOELoaderAlgorithm()
+        self.alg.initAlgorithm()
+        self.context = QgsProcessingContext()
+        self.feedback = MagicMock()
+        self.feedback.isCanceled.return_value = False
+
+        # Stands in for the ArcGIS layer
+        self.source = QgsVectorLayer(
+            f"Point?crs={self.SOURCE_CRS}&field=name:string", "source", "memory"
+        )
+        feature = QgsFeature(self.source.fields())
+        feature.setAttributes(["a"])
+        feature.setGeometry(
+            QgsGeometry.fromPointXY(QgsPointXY(self.SOURCE_X, self.SOURCE_Y))
+        )
+        self.source.dataProvider().addFeatures([feature])
+
+        meta = {"spatialReference": {"wkid": 4612}}
+        patcher = patch.multiple(
+            self.alg,
+            _resolve_layer_url_and_meta=MagicMock(
+                return_value=("https://example.com/FeatureServer/0", meta, meta)
+            ),
+            _create_arcgis_vector_layer=MagicMock(return_value=self.source),
+            _save_style_qml=MagicMock(return_value=None),
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _save(self, crs):
+        dest_id = self.alg._save_to_file(
+            "https://example.com/FeatureServer",
+            {"CRS": crs, "OUTPUT": "TEMPORARY_OUTPUT"},
+            self.context,
+            self.feedback,
+            dataset={"name": "test"},
+            dataset_key="test",
+        )
+        return self.context.temporaryLayerStore().mapLayer(dest_id)
+
+    @staticmethod
+    def _first_point(layer):
+        return next(layer.getFeatures()).geometry().asPoint()
+
+    def test_output_crs_reprojects_features(self):
+        output = self._save("EPSG:6691")
+
+        expected = QgsCoordinateTransform(
+            QgsCoordinateReferenceSystem(self.SOURCE_CRS),
+            QgsCoordinateReferenceSystem("EPSG:6691"),
+            QgsCoordinateTransformContext(),
+        ).transform(QgsPointXY(self.SOURCE_X, self.SOURCE_Y))
+        point = self._first_point(output)
+        self.assertEqual(output.crs().authid(), "EPSG:6691")
+        self.assertAlmostEqual(point.x(), expected.x(), places=3)
+        self.assertAlmostEqual(point.y(), expected.y(), places=3)
+
+    def test_no_output_crs_keeps_source_coordinates(self):
+        output = self._save(None)
+
+        point = self._first_point(output)
+        self.assertEqual(output.crs().authid(), self.SOURCE_CRS)
+        self.assertAlmostEqual(point.x(), self.SOURCE_X)
+        self.assertAlmostEqual(point.y(), self.SOURCE_Y)
+
+    def test_arcgis_layer_keeps_service_crs(self):
+        layer_id = self.alg._load_as_arcgis_layer(
+            "https://example.com/FeatureServer",
+            {"name": "test"},
+            False,
+            None,
+            {"CRS": "EPSG:6691"},
+            self.context,
+            self.feedback,
+        )
+        self.addCleanup(QgsProject.instance().removeMapLayer, layer_id)
+
+        self.assertEqual(self.source.crs().authid(), self.SOURCE_CRS)
+        self.feedback.pushWarning.assert_called_once()
 
 
 if __name__ == "__main__":

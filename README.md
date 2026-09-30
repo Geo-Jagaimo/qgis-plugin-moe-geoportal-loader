@@ -36,36 +36,19 @@
 | Medium/Large Mammal Distribution Survey | Badger, Fox, Raccoon Dog |
 | National Bear Distribution Mesh         | Basic Survey 1980        |
 
-#### Coral Reef Ecosystem Surveys（19 datasets）
+#### Coral Reef Ecosystem Surveys（3 datasets）
 
-| Dataset                        | Details                                                                                                                                                                                         |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Shallow Coral Ecosystem Survey | Tokara Islands（2021）, Kume Island（2018）, Tarama Island（2018）, Osumi Islands（2021）, Amami Islands（2018–2019）, Miyako Island（2018）, Ogasawara Islands（2020）, Sekisei Lagoon（2017） |
-| 4th Coral Survey（1988–1993）  | Coral Reef Distribution Area, Small-scale Ogasawara Coral Reef Area, Non-Coral Reef Distribution Area                                                                                           |
-| 5th Coral Survey（1993–1999）  | Distribution Area                                                                                                                                                                               |
+| Dataset                       | Details                                                                 |
+| ----------------------------- | ----------------------------------------------------------------------- |
+| 4th Coral Survey（1988–1993） | Small-scale Ogasawara Coral Reef Area, Non-Coral Reef Distribution Area |
+| 5th Coral Survey（1993–1999） | Distribution Area                                                       |
 
-#### Coral Reef Change Detection（24 datasets）
+#### Seaweed Bed Surveys（2 datasets）
 
-| Region                    | Comparisons                        |
-| ------------------------- | ---------------------------------- |
-| Amami-Oshima              | H20 vs R01, 4th vs R01, 5th vs R01 |
-| Tokunoshima               | H20 vs R01, 4th vs R01, 5th vs R01 |
-| Kume Island               | H20 vs H30, 4th vs H30             |
-| Miyako Island             | H20 vs H30, 4th vs H30             |
-| Ogasawara Islands         | H20 vs H30, 4th vs R02, 5th vs R02 |
-| Okinoerabu Island         | H20 vs H30, 4th vs H30             |
-| Tarama Island             | H20 vs H30, 4th vs H30             |
-| Yoron Island              | H20 vs H30, 4th vs H30             |
-| Takarajima & Kodakarajima | H20 vs R03, 4th vs R03             |
-| Tanegashima & Yakushima   | H20 vs R03, 4th vs R03, 5th vs R03 |
-
-#### Seaweed Bed Surveys（7 datasets）
-
-| Dataset                             | Details                     |
-| ----------------------------------- | --------------------------- |
-| 4th Seaweed Bed Survey（1988–1993） |                             |
-| 5th Seaweed Bed Survey（1993–1999） |                             |
-| Seaweed Bed Survey（2018–2020）     | UTM Zone 51, 52, 53, 54, 55 |
+| Dataset                             | Details |
+| ----------------------------------- | ------- |
+| 4th Seaweed Bed Survey（1988–1993） |         |
+| 5th Seaweed Bed Survey（1993–1999） |         |
 
 ## Requirements
 

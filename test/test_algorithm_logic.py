@@ -601,6 +601,9 @@ class _MockedServiceTestCase(unittest.TestCase):
                 return_value=("https://example.com/FeatureServer/0", meta, meta)
             ),
             _create_arcgis_vector_layer=MagicMock(return_value=self.source),
+            _open_feature_stream=MagicMock(
+                return_value=list(self.source.getFeatures())
+            ),
             _save_style_qml=MagicMock(return_value=None),
         )
         patcher.start()

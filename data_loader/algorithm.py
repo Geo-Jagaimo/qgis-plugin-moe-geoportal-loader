@@ -24,6 +24,7 @@ from qgis.core import (
 )
 from qgis.PyQt.QtCore import QCoreApplication
 
+from .feature_downloader import FeatureDownloader
 from .settings_datasets import DATASETS
 from .settings_prefecture import PREFECTURE_NAMES_EN, PREFECTURES
 
@@ -236,6 +237,16 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             return None
         return vector_layer
 
+    def _open_feature_stream(self, layer_url, vector_layer, layer_meta, feedback):
+        # Much faster than vector_layer.getFeatures(), which fetches 100 at a time
+        return FeatureDownloader(
+            layer_url,
+            vector_layer.fields(),
+            vector_layer.wkbType(),
+            feedback,
+            page_size=layer_meta.get("maxRecordCount"),
+        )
+
     def _set_vector_layer_crs(self, vector_layer, service_meta, layer_meta, feedback):
         extent_ref = (layer_meta.get("extent") or {}).get("spatialReference")
         layer_ref = layer_meta.get("spatialReference")
@@ -378,11 +389,14 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             f"Output CRS: {final_output_crs.authid() if final_output_crs.isValid() else 'Unknown'}"
         )
 
-        total = vector_layer.featureCount()
+        features = self._open_feature_stream(
+            layer_url, vector_layer, layer_meta, feedback
+        )
+        total = len(features)
         feedback.pushInfo(f"Writing {total} features to output...")
 
         processed = 0
-        for feature in vector_layer.getFeatures():
+        for feature in features:
             if feedback.isCanceled():
                 break
             new_f = QgsFeature(feature)

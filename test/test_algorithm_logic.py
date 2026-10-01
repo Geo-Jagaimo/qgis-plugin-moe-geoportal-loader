@@ -745,6 +745,14 @@ class TestStylePostProcessor(unittest.TestCase):
         )
         self.feedback.pushWarning.assert_called_once()
 
+    def test_removes_temporary_style_after_use(self):
+        self.layer.saveNamedStyle(self.qml_path)
+
+        _StylePostProcessor(self.qml_path, remove_after=True).postProcessLayer(
+            self.layer, None, self.feedback
+        )
+        self.assertFalse(os.path.exists(self.qml_path))
+
 
 if __name__ == "__main__":
     unittest.main()

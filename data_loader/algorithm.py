@@ -1,3 +1,4 @@
+import contextlib
 import json
 import os
 import re
@@ -30,9 +31,10 @@ from .settings_prefecture import PREFECTURE_NAMES_EN, PREFECTURES
 class _StylePostProcessor(QgsProcessingLayerPostProcessorInterface):
     _instance = None
 
-    def __init__(self, qml_path):
+    def __init__(self, qml_path, remove_after=False):
         super().__init__()
         self.qml_path = qml_path
+        self.remove_after = remove_after
         _StylePostProcessor._instance = self
 
     def postProcessLayer(self, layer, context, feedback):
@@ -44,6 +46,9 @@ class _StylePostProcessor(QgsProcessingLayerPostProcessorInterface):
             feedback.pushInfo(f"Applied style to layer: {layer.name()}")
         else:
             feedback.pushWarning(f"Failed to apply style: {message}")
+        if self.remove_after:
+            with contextlib.suppress(OSError):
+                os.remove(self.qml_path)
 
 
 class MOELoaderAlgorithm(QgsProcessingAlgorithm):
@@ -417,7 +422,9 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             details = context.layerToLoadOnCompletionDetails(dest_id)
             details.name = self._build_layer_name(dataset, has_prefecture, pref_idx)
             if qml_path:
-                details.setPostProcessor(_StylePostProcessor(qml_path))
+                details.setPostProcessor(
+                    _StylePostProcessor(qml_path, remove_after=not is_file_output)
+                )
         return dest_id
 
     def _save_style_qml(

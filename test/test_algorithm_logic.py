@@ -13,6 +13,7 @@ from qgis.core import (
     QgsGeometry,
     QgsPointXY,
     QgsProcessingContext,
+    QgsProcessingException,
     QgsProcessingOutputLayerDefinition,
     QgsProject,
     QgsVectorLayer,
@@ -267,29 +268,23 @@ class TestFetchJson(unittest.TestCase):
         self.assertEqual(result, expected)
 
     def test_rejects_ftp_scheme(self):
-        result = self.alg._fetch_json("ftp://example.com/data", self.feedback, "test")
-        self.assertIsNone(result)
-        self.feedback.reportError.assert_called_once()
+        with self.assertRaises(QgsProcessingException):
+            self.alg._fetch_json("ftp://example.com/data", self.feedback, "test")
 
     def test_rejects_file_scheme(self):
-        result = self.alg._fetch_json("file:///etc/passwd", self.feedback, "test")
-        self.assertIsNone(result)
-        self.feedback.reportError.assert_called_once()
+        with self.assertRaises(QgsProcessingException):
+            self.alg._fetch_json("file:///etc/passwd", self.feedback, "test")
 
     def test_rejects_javascript_scheme(self):
-        result = self.alg._fetch_json("javascript:alert(1)", self.feedback, "test")
-        self.assertIsNone(result)
-        self.feedback.reportError.assert_called_once()
+        with self.assertRaises(QgsProcessingException):
+            self.alg._fetch_json("javascript:alert(1)", self.feedback, "test")
 
     @patch("data_loader.algorithm.urlopen")
     def test_network_error(self, mock_urlopen):
         mock_urlopen.side_effect = ConnectionError("Connection refused")
-        result = self.alg._fetch_json(
-            "https://example.com/api", self.feedback, "test error"
-        )
-        self.assertIsNone(result)
-        self.feedback.reportError.assert_called_once()
-        self.assertIn("test error", self.feedback.reportError.call_args[0][0])
+        with self.assertRaises(QgsProcessingException) as raised:
+            self.alg._fetch_json("https://example.com/api", self.feedback, "test error")
+        self.assertIn("test error", str(raised.exception))
 
     @patch("data_loader.algorithm.urlopen")
     def test_invalid_json_response(self, mock_urlopen):
@@ -299,11 +294,8 @@ class TestFetchJson(unittest.TestCase):
         mock_response.__exit__ = MagicMock(return_value=False)
         mock_urlopen.return_value = mock_response
 
-        result = self.alg._fetch_json(
-            "https://example.com/api", self.feedback, "parse error"
-        )
-        self.assertIsNone(result)
-        self.feedback.reportError.assert_called_once()
+        with self.assertRaises(QgsProcessingException):
+            self.alg._fetch_json("https://example.com/api", self.feedback, "parse")
 
     def test_accepts_http_scheme(self):
         with patch("data_loader.algorithm.urlopen") as mock_urlopen:
@@ -319,7 +311,7 @@ class TestFetchJson(unittest.TestCase):
             self.assertEqual(result, {"ok": True})
 
     @patch("data_loader.algorithm.urlopen")
-    def test_arcgis_error_response_returns_none(self, mock_urlopen):
+    def test_arcgis_error_response_raises(self, mock_urlopen):
         body = {"error": {"code": 499, "message": "Token Required"}}
         mock_response = MagicMock()
         mock_response.read.return_value = json.dumps(body).encode()
@@ -327,14 +319,11 @@ class TestFetchJson(unittest.TestCase):
         mock_response.__exit__ = MagicMock(return_value=False)
         mock_urlopen.return_value = mock_response
 
-        result = self.alg._fetch_json(
-            "https://example.com/api", self.feedback, "error context"
-        )
-        self.assertIsNone(result)
-        self.assertIn(
-            "error context: 499 Token Required",
-            self.feedback.reportError.call_args[0][0],
-        )
+        with self.assertRaises(QgsProcessingException) as raised:
+            self.alg._fetch_json(
+                "https://example.com/api", self.feedback, "error context"
+            )
+        self.assertIn("error context: 499 Token Required", str(raised.exception))
 
 
 class TestResolveLayerUrlAndMeta(unittest.TestCase):
@@ -373,39 +362,40 @@ class TestResolveLayerUrlAndMeta(unittest.TestCase):
             layer_url, _, _ = result  # type: ignore
             self.assertEqual(layer_url, "https://example.com/FeatureServer/5")
 
-    def test_no_layers_returns_none(self):
+    def test_no_layers_raises(self):
         service_meta = {"layers": []}
         with patch.object(self.alg, "_fetch_json", return_value=service_meta):
-            result = self.alg._resolve_layer_url_and_meta(
-                "https://example.com/FeatureServer", self.feedback
-            )
-            self.assertIsNone(result)
-            self.feedback.reportError.assert_called()
+            with self.assertRaises(QgsProcessingException):
+                self.alg._resolve_layer_url_and_meta(
+                    "https://example.com/FeatureServer", self.feedback
+                )
 
-    def test_missing_layers_key_returns_none(self):
+    def test_missing_layers_key_raises(self):
         service_meta = {"services": []}
         with patch.object(self.alg, "_fetch_json", return_value=service_meta):
-            result = self.alg._resolve_layer_url_and_meta(
-                "https://example.com/FeatureServer", self.feedback
-            )
-            self.assertIsNone(result)
+            with self.assertRaises(QgsProcessingException):
+                self.alg._resolve_layer_url_and_meta(
+                    "https://example.com/FeatureServer", self.feedback
+                )
 
-    def test_service_fetch_failure_returns_none(self):
-        with patch.object(self.alg, "_fetch_json", return_value=None):
-            result = self.alg._resolve_layer_url_and_meta(
-                "https://example.com/FeatureServer", self.feedback
-            )
-            self.assertIsNone(result)
+    def test_service_fetch_failure_raises(self):
+        error = QgsProcessingException("Failed to fetch FeatureServer metadata")
+        with patch.object(self.alg, "_fetch_json", side_effect=error):
+            with self.assertRaises(QgsProcessingException):
+                self.alg._resolve_layer_url_and_meta(
+                    "https://example.com/FeatureServer", self.feedback
+                )
 
     def test_layer_meta_fetch_failure_returns_empty_dict(self):
         service_meta = {"layers": [{"id": 0}]}
-        with patch.object(self.alg, "_fetch_json", side_effect=[service_meta, None]):
+        error = QgsProcessingException("Failed to fetch layer metadata")
+        with patch.object(self.alg, "_fetch_json", side_effect=[service_meta, error]):
             result = self.alg._resolve_layer_url_and_meta(
                 "https://example.com/FeatureServer", self.feedback
             )
-            self.assertIsNotNone(result)
-            _, _, lyr = result  # type: ignore
+            _, _, lyr = result
             self.assertEqual(lyr, {})
+            self.feedback.pushWarning.assert_called_once()
 
 
 class TestCheckParameterValues(unittest.TestCase):
@@ -481,24 +471,6 @@ class TestAlgorithmIdentity(unittest.TestCase):
         help_str = self.alg.shortHelpString()
         self.assertIsInstance(help_str, str)
         self.assertIn("geoportal", help_str.lower())
-
-
-class TestReportException(unittest.TestCase):
-    """Tests for MOELoaderAlgorithm._report_exception"""
-
-    def setUp(self):
-        self.alg = MOELoaderAlgorithm()
-        self.feedback = MagicMock()
-
-    def test_reports_error_and_traceback(self):
-        try:
-            raise ValueError("test error")
-        except ValueError as e:
-            self.alg._report_exception(self.feedback, "Something failed", e)
-        self.assertEqual(self.feedback.reportError.call_count, 2)
-        first_call = self.feedback.reportError.call_args_list[0][0][0]
-        self.assertIn("Something failed", first_call)
-        self.assertIn("test error", first_call)
 
 
 class TestGetBundledQml(unittest.TestCase):
@@ -594,16 +566,15 @@ class TestCreateArcgisVectorLayer(unittest.TestCase):
         )
 
     @patch("data_loader.algorithm.QgsVectorLayer")
-    def test_returns_none_when_invalid(self, mock_layer_cls):
+    def test_raises_when_invalid(self, mock_layer_cls):
         mock_layer = MagicMock()
         mock_layer.isValid.return_value = False
         mock_layer_cls.return_value = mock_layer
 
-        result = self.alg._create_arcgis_vector_layer(
-            "https://example.com/FeatureServer/0", "test_layer", self.feedback
-        )
-        self.assertIsNone(result)
-        self.feedback.reportError.assert_called_once()
+        with self.assertRaises(QgsProcessingException):
+            self.alg._create_arcgis_vector_layer(
+                "https://example.com/FeatureServer/0", "test_layer", self.feedback
+            )
 
 
 class _MockedServiceTestCase(unittest.TestCase):
@@ -711,6 +682,37 @@ class TestOutputCrs(_MockedServiceTestCase):
 
         self.assertEqual(self.source.crs().authid(), self.SOURCE_CRS)
         self.feedback.pushWarning.assert_called_once()
+
+
+class TestFailures(_MockedServiceTestCase):
+    """Failures must fail the algorithm instead of ending as a success."""
+
+    def test_unavailable_service_fails_the_algorithm(self):
+        self.alg._resolve_layer_url_and_meta.side_effect = QgsProcessingException(
+            "Failed to fetch FeatureServer metadata: 499 Token Required"
+        )
+        for mode in ({}, {"ADD_AS_ARCGIS_LAYER": True}):
+            parameters = {"CATEGORY": 1, "OUTPUT": "TEMPORARY_OUTPUT", **mode}
+            with self.subTest(mode=mode), self.assertRaises(QgsProcessingException):
+                self.alg.processAlgorithm(parameters, self.context, self.feedback)
+
+    def test_arcgis_layer_errors_are_not_swallowed(self):
+        self.alg._create_arcgis_vector_layer.side_effect = QgsProcessingException(
+            "Failed to load layer"
+        )
+        with self.assertRaises(QgsProcessingException):
+            self._load_as_arcgis_layer({})
+
+    def test_reprojecting_from_an_unknown_crs_fails(self):
+        self.alg._resolve_layer_url_and_meta.return_value = (
+            "https://example.com/FeatureServer/0",
+            {},
+            {},
+        )
+        self.source.setCrs(QgsCoordinateReferenceSystem())
+
+        with self.assertRaises(QgsProcessingException):
+            self._save_to_file({"CRS": "EPSG:6691", "OUTPUT": "TEMPORARY_OUTPUT"})
 
 
 class TestLayerLoading(_MockedServiceTestCase):

@@ -3,7 +3,6 @@ import json
 import os
 import re
 import tempfile
-import traceback
 from urllib.request import urlopen
 
 from qgis.core import (
@@ -15,6 +14,7 @@ from qgis.core import (
     QgsFields,
     QgsProcessingAlgorithm,
     QgsProcessingContext,
+    QgsProcessingException,
     QgsProcessingLayerPostProcessorInterface,
     QgsProcessingParameterBoolean,
     QgsProcessingParameterCrs,
@@ -162,10 +162,9 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             return {"OUTPUT": layer_id}
 
         if not parameters.get(self.OUTPUT):
-            feedback.reportError(
+            raise QgsProcessingException(
                 self.tr("Please specify the save location for the output layer.")
             )
-            return {"OUTPUT": None}
 
         file_output = self._save_to_file(
             url,
@@ -186,39 +185,36 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             with urlopen(url) as response:  # noqa: S310  # nosec B310  # scheme validated above
                 data = json.loads(response.read().decode())
         except Exception as e:
-            feedback.reportError(f"{error_context}: {str(e)}")
-            return None
+            raise QgsProcessingException(f"{error_context}: {e}") from e
 
         # ArcGIS reports errors such as "499 Token Required" in the JSON body
         error = data.get("error") if isinstance(data, dict) else None
         if error:
-            feedback.reportError(
+            raise QgsProcessingException(
                 f"{error_context}: {error.get('code')} {error.get('message')}"
             )
-            return None
         return data
 
     def _resolve_layer_url_and_meta(self, url, feedback):
         service_meta = self._fetch_json(
             f"{url}?f=json", feedback, "Failed to fetch FeatureServer metadata"
         )
-        if not service_meta:
-            return None
-
         layers = service_meta.get("layers", [])
         if not layers:
-            feedback.reportError(f"No layers found in FeatureServer: {url}")
-            return None
+            raise QgsProcessingException(f"No layers found in FeatureServer: {url}")
 
         first_layer = layers[0]
         layer_id = first_layer.get("id")
         layer_url = f"{url}/{layer_id}"
 
-        # fmt: off
-        layer_meta = self._fetch_json(
-            f"{layer_url}?f=json", feedback, "Failed to fetch layer metadata"
-        ) or {}
-        # fmt: on
+        try:
+            layer_meta = self._fetch_json(
+                f"{layer_url}?f=json", feedback, "Failed to fetch layer metadata"
+            )
+        except QgsProcessingException as e:
+            # Only used for the CRS and page size; the layer itself still loads
+            feedback.pushWarning(str(e))
+            layer_meta = {}
 
         return (layer_url, service_meta, layer_meta)
 
@@ -233,8 +229,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         uri = f"url='{layer_url}'"
         vector_layer = QgsVectorLayer(uri, layer_name, "arcgisfeatureserver")
         if not vector_layer.isValid():
-            feedback.reportError(f"Failed to load layer (URL: {layer_url})")
-            return None
+            raise QgsProcessingException(f"Failed to load layer (URL: {layer_url})")
         return vector_layer
 
     def _open_feature_stream(self, layer_url, vector_layer, layer_meta, feedback):
@@ -268,10 +263,6 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
         vector_layer.setCrs(layer_crs)
 
-    def _report_exception(self, feedback, message, exception):
-        feedback.reportError(f"{message}: {str(exception)}")
-        feedback.reportError(traceback.format_exc())
-
     def _extract_output_path(self, dest_id):
         dest_str = dest_id or ""
         output_path = dest_str.split("|", 1)[0] if "|" in dest_str else dest_str
@@ -286,43 +277,32 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
     def _load_as_arcgis_layer(
         self, url, dataset, has_prefecture, pref_idx, parameters, context, feedback
     ):
-        try:
-            resolved = self._resolve_layer_url_and_meta(url, feedback)
-            if not resolved:
-                return None
-            layer_url, service_meta, layer_meta = resolved
+        layer_url, service_meta, layer_meta = self._resolve_layer_url_and_meta(
+            url, feedback
+        )
+        layer_name = self._build_layer_name(dataset, has_prefecture, pref_idx)
+        vector_layer = self._create_arcgis_vector_layer(layer_url, layer_name, feedback)
 
-            layer_name = self._build_layer_name(dataset, has_prefecture, pref_idx)
-            vector_layer = self._create_arcgis_vector_layer(
-                layer_url, layer_name, feedback
+        self._set_vector_layer_crs(vector_layer, service_meta, layer_meta, feedback)
+
+        param_crs = self.parameterAsCrs(parameters, self.CRS, context)
+        if param_crs.isValid() and param_crs != vector_layer.crs():
+            feedback.pushWarning(
+                f"Output CRS {param_crs.authid()} is not applied to ArcGIS "
+                "layers; QGIS reprojects them on the fly."
             )
-            if vector_layer is None:
-                return None
 
-            self._set_vector_layer_crs(vector_layer, service_meta, layer_meta, feedback)
-
-            param_crs = self.parameterAsCrs(parameters, self.CRS, context)
-            if param_crs.isValid() and param_crs != vector_layer.crs():
-                feedback.pushWarning(
-                    f"Output CRS {param_crs.authid()} is not applied to ArcGIS "
-                    "layers; QGIS reprojects them on the fly."
-                )
-
-            # processAlgorithm runs in a background thread, so hand the layer to
-            # QGIS, which adds it to the project on the main thread afterwards
-            context.temporaryLayerStore().addMapLayer(vector_layer)
-            context.addLayerToLoadOnCompletion(
-                vector_layer.id(),
-                QgsProcessingContext.LayerDetails(
-                    layer_name, context.project(), self.OUTPUT
-                ),
-            )
-            feedback.pushInfo(f"Successfully loaded layer: {layer_name}")
-            return vector_layer.id()
-
-        except Exception as e:
-            self._report_exception(feedback, "Error loading layer", e)
-            return None
+        # processAlgorithm runs in a background thread, so hand the layer to
+        # QGIS, which adds it to the project on the main thread afterwards
+        context.temporaryLayerStore().addMapLayer(vector_layer)
+        context.addLayerToLoadOnCompletion(
+            vector_layer.id(),
+            QgsProcessingContext.LayerDetails(
+                layer_name, context.project(), self.OUTPUT
+            ),
+        )
+        feedback.pushInfo(f"Successfully loaded layer: {layer_name}")
+        return vector_layer.id()
 
     def _save_to_file(
         self,
@@ -335,14 +315,10 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         has_prefecture=False,
         pref_idx=None,
     ):
-        resolved = self._resolve_layer_url_and_meta(url, feedback)
-        if not resolved:
-            return None
-        layer_url, service_meta, layer_meta = resolved
-
+        layer_url, service_meta, layer_meta = self._resolve_layer_url_and_meta(
+            url, feedback
+        )
         vector_layer = self._create_arcgis_vector_layer(layer_url, "temp", feedback)
-        if vector_layer is None:
-            return None
 
         self._set_vector_layer_crs(vector_layer, service_meta, layer_meta, feedback)
 
@@ -350,10 +326,9 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         param_crs = self.parameterAsCrs(parameters, self.CRS, context)
         if param_crs.isValid() and param_crs != source_crs:
             if not source_crs.isValid():
-                feedback.reportError(
+                raise QgsProcessingException(
                     "Cannot reproject to the output CRS: the source CRS is unknown."
                 )
-                return None
             final_output_crs = param_crs
             feedback.pushInfo(
                 f"Reprojecting on save: {source_crs.authid()} → {final_output_crs.authid()}"
@@ -382,8 +357,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         )
 
         if sink is None:
-            feedback.reportError(self.tr("Failed to create output layer."))
-            return None
+            raise QgsProcessingException(self.tr("Failed to create output layer."))
 
         feedback.pushInfo(
             f"Output CRS: {final_output_crs.authid() if final_output_crs.isValid() else 'Unknown'}"

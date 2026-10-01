@@ -37,13 +37,14 @@ class _StylePostProcessor(QgsProcessingLayerPostProcessorInterface):
         _StylePostProcessor._instance = self
 
     def postProcessLayer(self, layer, context, feedback):
-        if self.qml_path and os.path.exists(self.qml_path):
-            ok, err = layer.loadNamedStyle(self.qml_path)
-            if ok:
-                layer.triggerRepaint()
-                feedback.pushInfo(f"Applied style to layer: {layer.name()}")
-            else:
-                feedback.pushInfo(f"Failed to apply style: {err}")
+        if not self.qml_path or not os.path.exists(self.qml_path):
+            return
+        message, ok = layer.loadNamedStyle(self.qml_path)
+        if ok:
+            layer.triggerRepaint()
+            feedback.pushInfo(f"Applied style to layer: {layer.name()}")
+        else:
+            feedback.pushWarning(f"Failed to apply style: {message}")
 
 
 class MOELoaderAlgorithm(QgsProcessingAlgorithm):

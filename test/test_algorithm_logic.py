@@ -1,5 +1,6 @@
 import json
 import os
+import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -14,9 +15,10 @@ from qgis.core import (
     QgsProject,
     QgsVectorLayer,
 )
+from qgis.PyQt.QtGui import QColor
 from qgis.testing import start_app
 
-from data_loader.algorithm import MOELoaderAlgorithm
+from data_loader.algorithm import MOELoaderAlgorithm, _StylePostProcessor
 from data_loader.settings_prefecture import PREFECTURES
 
 # Check if PROJ database is available for CRS tests
@@ -653,6 +655,45 @@ class TestOutputCrs(unittest.TestCase):
         self.addCleanup(QgsProject.instance().removeMapLayer, layer_id)
 
         self.assertEqual(self.source.crs().authid(), self.SOURCE_CRS)
+        self.feedback.pushWarning.assert_called_once()
+
+
+class TestStylePostProcessor(unittest.TestCase):
+    """_StylePostProcessor must apply the QML and report the actual outcome."""
+
+    @classmethod
+    def setUpClass(cls):
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        start_app()
+
+    def setUp(self):
+        self.layer = QgsVectorLayer("Point?crs=EPSG:4326", "layer", "memory")
+        self.feedback = MagicMock()
+        fd, self.qml_path = tempfile.mkstemp(suffix=".qml")
+        os.close(fd)
+        self.addCleanup(
+            lambda: os.path.exists(self.qml_path) and os.remove(self.qml_path)
+        )
+
+    def test_applies_style(self):
+        styled = QgsVectorLayer("Point?crs=EPSG:4326", "styled", "memory")
+        styled.renderer().symbol().setColor(QColor(12, 34, 56))
+        styled.saveNamedStyle(self.qml_path)
+
+        _StylePostProcessor(self.qml_path).postProcessLayer(
+            self.layer, None, self.feedback
+        )
+        self.assertEqual(self.layer.renderer().symbol().color(), QColor(12, 34, 56))
+        self.feedback.pushInfo.assert_called_once()
+        self.feedback.pushWarning.assert_not_called()
+
+    def test_reports_broken_style(self):
+        with open(self.qml_path, "w", encoding="utf-8") as f:
+            f.write("<qgis><renderer-v2")
+
+        _StylePostProcessor(self.qml_path).postProcessLayer(
+            self.layer, None, self.feedback
+        )
         self.feedback.pushWarning.assert_called_once()
 
 

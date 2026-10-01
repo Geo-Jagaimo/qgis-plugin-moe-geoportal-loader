@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
@@ -525,6 +526,48 @@ class TestGetBundledQml(unittest.TestCase):
     def test_returns_none_for_none_key(self):
         result = self.alg._get_bundled_qml(None)
         self.assertIsNone(result)
+
+
+class TestSaveStyleQml(unittest.TestCase):
+    """_save_style_qml must notice when QGIS could not write the style."""
+
+    @classmethod
+    def setUpClass(cls):
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        start_app()
+
+    def setUp(self):
+        self.alg = MOELoaderAlgorithm()
+        self.layer = QgsVectorLayer("Point?crs=EPSG:4326", "layer", "memory")
+        self.feedback = MagicMock()
+
+    def test_saves_style_next_to_file_output(self):
+        out_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, out_dir)
+
+        qml_path = self.alg._save_style_qml(
+            self.layer, os.path.join(out_dir, "out.gpkg"), None, True, self.feedback
+        )
+        self.assertEqual(qml_path, os.path.join(out_dir, "out.qml"))
+        self.assertTrue(os.path.exists(qml_path))
+        self.feedback.reportError.assert_not_called()
+
+    def test_reports_style_that_could_not_be_saved(self):
+        output_path = os.path.join(tempfile.gettempdir(), "no_such_dir_xyz", "out.gpkg")
+
+        qml_path = self.alg._save_style_qml(
+            self.layer, output_path, None, True, self.feedback
+        )
+        self.assertIsNone(qml_path)
+        self.feedback.reportError.assert_called_once()
+
+    def test_removes_temporary_file_when_saving_fails(self):
+        layer = MagicMock()
+        layer.saveNamedStyle.return_value = ("ERROR: Failed to save", False)
+
+        qml_path = self.alg._save_style_qml(layer, "", None, False, self.feedback)
+        self.assertIsNone(qml_path)
+        self.assertFalse(os.path.exists(layer.saveNamedStyle.call_args[0][0]))
 
 
 class TestCreateArcgisVectorLayer(unittest.TestCase):

@@ -464,13 +464,16 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 feedback.pushInfo("Converted RasterFill to native symbols")
             return qml_path
 
-        res, err = vector_layer.saveNamedStyle(qml_path)
-        if res:
+        message, ok = vector_layer.saveNamedStyle(qml_path)
+        if ok:
             feedback.pushInfo(f"Saved style file: {qml_path}")
             return qml_path
-        else:
-            feedback.reportError(f"Failed to save style to {qml_path}: {err}")
-            return None
+
+        feedback.reportError(f"Failed to save style to {qml_path}: {message}")
+        if not is_file_output:
+            with contextlib.suppress(OSError):
+                os.remove(qml_path)
+        return None
 
     def _get_bundled_qml(self, dataset_key):
         styles_dir = os.path.join(os.path.dirname(__file__), "styles")

@@ -1,5 +1,6 @@
 import json
 import os
+import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -11,12 +12,14 @@ from qgis.core import (
     QgsGeometry,
     QgsPointXY,
     QgsProcessingContext,
+    QgsProcessingOutputLayerDefinition,
     QgsProject,
     QgsVectorLayer,
 )
+from qgis.PyQt.QtGui import QColor
 from qgis.testing import start_app
 
-from data_loader.algorithm import MOELoaderAlgorithm
+from data_loader.algorithm import MOELoaderAlgorithm, _StylePostProcessor
 from data_loader.settings_prefecture import PREFECTURES
 
 # Check if PROJ database is available for CRS tests
@@ -560,8 +563,8 @@ class TestCreateArcgisVectorLayer(unittest.TestCase):
         self.feedback.reportError.assert_called_once()
 
 
-class TestOutputCrs(unittest.TestCase):
-    """The CRS parameter must reproject saved features, never relabel them."""
+class _MockedServiceTestCase(unittest.TestCase):
+    """Runs the algorithm against a memory layer standing in for the ArcGIS service."""
 
     # so4 is served in JGD2000 geographic coordinates
     SOURCE_CRS = "EPSG:4612"
@@ -581,7 +584,6 @@ class TestOutputCrs(unittest.TestCase):
         self.feedback = MagicMock()
         self.feedback.isCanceled.return_value = False
 
-        # Stands in for the ArcGIS layer
         self.source = QgsVectorLayer(
             f"Point?crs={self.SOURCE_CRS}&field=name:string", "source", "memory"
         )
@@ -599,20 +601,41 @@ class TestOutputCrs(unittest.TestCase):
                 return_value=("https://example.com/FeatureServer/0", meta, meta)
             ),
             _create_arcgis_vector_layer=MagicMock(return_value=self.source),
+            _open_feature_stream=MagicMock(
+                return_value=list(self.source.getFeatures())
+            ),
             _save_style_qml=MagicMock(return_value=None),
         )
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def _save(self, crs):
-        dest_id = self.alg._save_to_file(
+    def _save_to_file(self, parameters):
+        return self.alg._save_to_file(
             "https://example.com/FeatureServer",
-            {"CRS": crs, "OUTPUT": "TEMPORARY_OUTPUT"},
+            parameters,
             self.context,
             self.feedback,
             dataset={"name": "test"},
             dataset_key="test",
         )
+
+    def _load_as_arcgis_layer(self, parameters):
+        return self.alg._load_as_arcgis_layer(
+            "https://example.com/FeatureServer",
+            {"name": "test"},
+            False,
+            None,
+            parameters,
+            self.context,
+            self.feedback,
+        )
+
+
+class TestOutputCrs(_MockedServiceTestCase):
+    """The CRS parameter must reproject saved features, never relabel them."""
+
+    def _save(self, crs):
+        dest_id = self._save_to_file({"CRS": crs, "OUTPUT": "TEMPORARY_OUTPUT"})
         return self.context.temporaryLayerStore().mapLayer(dest_id)
 
     @staticmethod
@@ -641,19 +664,97 @@ class TestOutputCrs(unittest.TestCase):
         self.assertAlmostEqual(point.y(), self.SOURCE_Y)
 
     def test_arcgis_layer_keeps_service_crs(self):
-        layer_id = self.alg._load_as_arcgis_layer(
-            "https://example.com/FeatureServer",
-            {"name": "test"},
-            False,
-            None,
-            {"CRS": "EPSG:6691"},
-            self.context,
-            self.feedback,
-        )
-        self.addCleanup(QgsProject.instance().removeMapLayer, layer_id)
+        self._load_as_arcgis_layer({"CRS": "EPSG:6691"})
 
         self.assertEqual(self.source.crs().authid(), self.SOURCE_CRS)
         self.feedback.pushWarning.assert_called_once()
+
+
+class TestLayerLoading(_MockedServiceTestCase):
+    """processAlgorithm runs in a worker thread and must not touch the project."""
+
+    def test_arcgis_layer_is_handed_to_the_context(self):
+        layers_before = QgsProject.instance().count()
+        layer_id = self._load_as_arcgis_layer({})
+
+        self.assertEqual(QgsProject.instance().count(), layers_before)
+        self.assertIs(
+            self.context.temporaryLayerStore().mapLayer(layer_id), self.source
+        )
+        self.assertTrue(self.context.willLoadLayerOnCompletion(layer_id))
+        details = self.context.layerToLoadOnCompletionDetails(layer_id)
+        self.assertEqual(details.name, "test")
+
+    def test_registered_output_gets_name_and_style(self):
+        fd, qml_path = tempfile.mkstemp(suffix=".qml")
+        os.close(fd)
+        self.addCleanup(os.remove, qml_path)
+        self.alg._save_style_qml.return_value = qml_path
+        output = QgsProcessingOutputLayerDefinition(
+            "TEMPORARY_OUTPUT", QgsProject.instance()
+        )
+
+        layers_before = QgsProject.instance().count()
+        dest_id = self._save_to_file({"OUTPUT": output})
+
+        self.assertEqual(QgsProject.instance().count(), layers_before)
+        details = self.context.layerToLoadOnCompletionDetails(dest_id)
+        self.assertEqual(details.name, "test")
+        self.assertIsInstance(details.postProcessor(), _StylePostProcessor)
+        self.assertEqual(details.postProcessor().qml_path, qml_path)
+
+    def test_unregistered_output_is_not_loaded(self):
+        dest_id = self._save_to_file({"OUTPUT": "TEMPORARY_OUTPUT"})
+
+        self.assertFalse(self.context.willLoadLayerOnCompletion(dest_id))
+        self.alg._save_style_qml.assert_not_called()
+
+
+class TestStylePostProcessor(unittest.TestCase):
+    """_StylePostProcessor must apply the QML and report the actual outcome."""
+
+    @classmethod
+    def setUpClass(cls):
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        start_app()
+
+    def setUp(self):
+        self.layer = QgsVectorLayer("Point?crs=EPSG:4326", "layer", "memory")
+        self.feedback = MagicMock()
+        fd, self.qml_path = tempfile.mkstemp(suffix=".qml")
+        os.close(fd)
+        self.addCleanup(
+            lambda: os.path.exists(self.qml_path) and os.remove(self.qml_path)
+        )
+
+    def test_applies_style(self):
+        styled = QgsVectorLayer("Point?crs=EPSG:4326", "styled", "memory")
+        styled.renderer().symbol().setColor(QColor(12, 34, 56))
+        styled.saveNamedStyle(self.qml_path)
+
+        _StylePostProcessor(self.qml_path).postProcessLayer(
+            self.layer, None, self.feedback
+        )
+        self.assertEqual(self.layer.renderer().symbol().color(), QColor(12, 34, 56))
+        self.feedback.pushInfo.assert_called_once()
+        self.feedback.pushWarning.assert_not_called()
+
+    def test_reports_broken_style(self):
+        with open(self.qml_path, "w", encoding="utf-8") as f:
+            f.write("<qgis><renderer-v2")
+
+        _StylePostProcessor(self.qml_path).postProcessLayer(
+            self.layer, None, self.feedback
+        )
+        self.feedback.pushWarning.assert_called_once()
+
+    def test_removes_temporary_style_after_use(self):
+        self.layer.saveNamedStyle(self.qml_path)
+
+        _StylePostProcessor(self.qml_path, remove_after=True).postProcessLayer(
+            self.layer, None, self.feedback
+        )
+        self.assertFalse(os.path.exists(self.qml_path))
 
 
 if __name__ == "__main__":

@@ -19,7 +19,6 @@ from qgis.core import (
     QgsProcessingParameterCrs,
     QgsProcessingParameterEnum,
     QgsProcessingParameterFeatureSink,
-    QgsProject,
     QgsVectorLayer,
 )
 from qgis.PyQt.QtCore import QCoreApplication
@@ -293,7 +292,15 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                     "layers; QGIS reprojects them on the fly."
                 )
 
-            QgsProject.instance().addMapLayer(vector_layer)
+            # processAlgorithm runs in a background thread, so hand the layer to
+            # QGIS, which adds it to the project on the main thread afterwards
+            context.temporaryLayerStore().addMapLayer(vector_layer)
+            context.addLayerToLoadOnCompletion(
+                vector_layer.id(),
+                QgsProcessingContext.LayerDetails(
+                    layer_name, context.project(), self.OUTPUT
+                ),
+            )
             feedback.pushInfo(f"Successfully loaded layer: {layer_name}")
             return vector_layer.id()
 
@@ -395,45 +402,22 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         del sink
 
         output_path = self._extract_output_path(dest_id)
+        is_file_output = bool(output_path) and os.path.isabs(output_path)
 
-        # Build layer name
-        layer_name = self._build_layer_name(dataset, has_prefecture, pref_idx)
+        # QGIS registers the output when "Open output file after running
+        # algorithm" is checked and loads it on the main thread afterwards
+        will_load = context.willLoadLayerOnCompletion(dest_id)
+        if not (is_file_output or will_load):
+            return dest_id
 
-        # Check if this is a real file path (absolute path)
-        is_file_output = output_path and os.path.isabs(output_path)
-
-        # Save style QML
         qml_path = self._save_style_qml(
             vector_layer, output_path, dataset_key, is_file_output, feedback
         )
-
-        if is_file_output:
-            # Load the saved layer and add it to the project with style
-            try:
-                saved_layer = QgsVectorLayer(output_path, layer_name, "ogr")
-                if saved_layer.isValid():
-                    QgsProject.instance().addMapLayer(saved_layer)
-                    feedback.pushInfo(f"Added layer to project: {layer_name}")
-                    context.addLayerToLoadOnCompletion(
-                        saved_layer.id(),
-                        QgsProcessingContext.LayerDetails(
-                            layer_name, QgsProject.instance(), self.OUTPUT
-                        ),
-                    )
-                else:
-                    feedback.reportError(f"Could not load saved layer: {output_path}")
-            except Exception as e:
-                self._report_exception(feedback, "Error loading saved layer", e)
-        else:
-            # For memory layers: apply style via post-processor
-            feedback.pushInfo(f"Setting layer name to: {layer_name}")
-            details = QgsProcessingContext.LayerDetails(
-                layer_name, QgsProject.instance(), self.OUTPUT
-            )
+        if will_load:
+            details = context.layerToLoadOnCompletionDetails(dest_id)
+            details.name = self._build_layer_name(dataset, has_prefecture, pref_idx)
             if qml_path:
                 details.setPostProcessor(_StylePostProcessor(qml_path))
-            context.addLayerToLoadOnCompletion(dest_id, details)
-
         return dest_id
 
     def _save_style_qml(

@@ -12,6 +12,7 @@ from qgis.core import (
     QgsGeometry,
     QgsPointXY,
     QgsProcessingContext,
+    QgsProcessingOutputLayerDefinition,
     QgsProject,
     QgsVectorLayer,
 )
@@ -562,8 +563,8 @@ class TestCreateArcgisVectorLayer(unittest.TestCase):
         self.feedback.reportError.assert_called_once()
 
 
-class TestOutputCrs(unittest.TestCase):
-    """The CRS parameter must reproject saved features, never relabel them."""
+class _MockedServiceTestCase(unittest.TestCase):
+    """Runs the algorithm against a memory layer standing in for the ArcGIS service."""
 
     # so4 is served in JGD2000 geographic coordinates
     SOURCE_CRS = "EPSG:4612"
@@ -583,7 +584,6 @@ class TestOutputCrs(unittest.TestCase):
         self.feedback = MagicMock()
         self.feedback.isCanceled.return_value = False
 
-        # Stands in for the ArcGIS layer
         self.source = QgsVectorLayer(
             f"Point?crs={self.SOURCE_CRS}&field=name:string", "source", "memory"
         )
@@ -606,15 +606,33 @@ class TestOutputCrs(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def _save(self, crs):
-        dest_id = self.alg._save_to_file(
+    def _save_to_file(self, parameters):
+        return self.alg._save_to_file(
             "https://example.com/FeatureServer",
-            {"CRS": crs, "OUTPUT": "TEMPORARY_OUTPUT"},
+            parameters,
             self.context,
             self.feedback,
             dataset={"name": "test"},
             dataset_key="test",
         )
+
+    def _load_as_arcgis_layer(self, parameters):
+        return self.alg._load_as_arcgis_layer(
+            "https://example.com/FeatureServer",
+            {"name": "test"},
+            False,
+            None,
+            parameters,
+            self.context,
+            self.feedback,
+        )
+
+
+class TestOutputCrs(_MockedServiceTestCase):
+    """The CRS parameter must reproject saved features, never relabel them."""
+
+    def _save(self, crs):
+        dest_id = self._save_to_file({"CRS": crs, "OUTPUT": "TEMPORARY_OUTPUT"})
         return self.context.temporaryLayerStore().mapLayer(dest_id)
 
     @staticmethod
@@ -643,19 +661,50 @@ class TestOutputCrs(unittest.TestCase):
         self.assertAlmostEqual(point.y(), self.SOURCE_Y)
 
     def test_arcgis_layer_keeps_service_crs(self):
-        layer_id = self.alg._load_as_arcgis_layer(
-            "https://example.com/FeatureServer",
-            {"name": "test"},
-            False,
-            None,
-            {"CRS": "EPSG:6691"},
-            self.context,
-            self.feedback,
-        )
-        self.addCleanup(QgsProject.instance().removeMapLayer, layer_id)
+        self._load_as_arcgis_layer({"CRS": "EPSG:6691"})
 
         self.assertEqual(self.source.crs().authid(), self.SOURCE_CRS)
         self.feedback.pushWarning.assert_called_once()
+
+
+class TestLayerLoading(_MockedServiceTestCase):
+    """processAlgorithm runs in a worker thread and must not touch the project."""
+
+    def test_arcgis_layer_is_handed_to_the_context(self):
+        layers_before = QgsProject.instance().count()
+        layer_id = self._load_as_arcgis_layer({})
+
+        self.assertEqual(QgsProject.instance().count(), layers_before)
+        self.assertIs(
+            self.context.temporaryLayerStore().mapLayer(layer_id), self.source
+        )
+        self.assertTrue(self.context.willLoadLayerOnCompletion(layer_id))
+        details = self.context.layerToLoadOnCompletionDetails(layer_id)
+        self.assertEqual(details.name, "test")
+
+    def test_registered_output_gets_name_and_style(self):
+        fd, qml_path = tempfile.mkstemp(suffix=".qml")
+        os.close(fd)
+        self.addCleanup(os.remove, qml_path)
+        self.alg._save_style_qml.return_value = qml_path
+        output = QgsProcessingOutputLayerDefinition(
+            "TEMPORARY_OUTPUT", QgsProject.instance()
+        )
+
+        layers_before = QgsProject.instance().count()
+        dest_id = self._save_to_file({"OUTPUT": output})
+
+        self.assertEqual(QgsProject.instance().count(), layers_before)
+        details = self.context.layerToLoadOnCompletionDetails(dest_id)
+        self.assertEqual(details.name, "test")
+        self.assertIsInstance(details.postProcessor(), _StylePostProcessor)
+        self.assertEqual(details.postProcessor().qml_path, qml_path)
+
+    def test_unregistered_output_is_not_loaded(self):
+        dest_id = self._save_to_file({"OUTPUT": "TEMPORARY_OUTPUT"})
+
+        self.assertFalse(self.context.willLoadLayerOnCompletion(dest_id))
+        self.alg._save_style_qml.assert_not_called()
 
 
 class TestStylePostProcessor(unittest.TestCase):

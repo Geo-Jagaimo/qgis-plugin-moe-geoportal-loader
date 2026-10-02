@@ -1,4 +1,3 @@
-import json
 import os
 import shutil
 import tempfile
@@ -253,71 +252,47 @@ class TestFetchJson(unittest.TestCase):
         self.alg = MOELoaderAlgorithm()
         self.feedback = MagicMock()
 
-    @patch("data_loader.algorithm.urlopen")
-    def test_valid_json_response(self, mock_urlopen):
+    @patch("data_loader.algorithm.get_json")
+    def test_valid_json_response(self, mock_get_json):
         expected = {"layers": [{"id": 0}]}
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps(expected).encode()
-        mock_response.__enter__ = MagicMock(return_value=mock_response)
-        mock_response.__exit__ = MagicMock(return_value=False)
-        mock_urlopen.return_value = mock_response
+        mock_get_json.return_value = expected
 
-        result = self.alg._fetch_json(
-            "https://example.com/api?f=json", self.feedback, "test"
-        )
+        url = "https://example.com/api?f=json"
+        result = self.alg._fetch_json(url, self.feedback, "test")
         self.assertEqual(result, expected)
+        # The feedback is passed on so that canceling aborts the request
+        mock_get_json.assert_called_once_with(url, self.feedback)
 
-    def test_rejects_ftp_scheme(self):
-        with self.assertRaises(QgsProcessingException):
-            self.alg._fetch_json("ftp://example.com/data", self.feedback, "test")
+    @patch("data_loader.algorithm.get_json")
+    def test_rejects_non_http_schemes(self, mock_get_json):
+        for url in ("ftp://example.com/data", "file:///etc/passwd", "javascript:x"):
+            with self.subTest(url=url), self.assertRaises(QgsProcessingException):
+                self.alg._fetch_json(url, self.feedback, "test")
+        mock_get_json.assert_not_called()
 
-    def test_rejects_file_scheme(self):
-        with self.assertRaises(QgsProcessingException):
-            self.alg._fetch_json("file:///etc/passwd", self.feedback, "test")
-
-    def test_rejects_javascript_scheme(self):
-        with self.assertRaises(QgsProcessingException):
-            self.alg._fetch_json("javascript:alert(1)", self.feedback, "test")
-
-    @patch("data_loader.algorithm.urlopen")
-    def test_network_error(self, mock_urlopen):
-        mock_urlopen.side_effect = ConnectionError("Connection refused")
+    @patch("data_loader.algorithm.get_json")
+    def test_network_error(self, mock_get_json):
+        mock_get_json.side_effect = OSError("Connection refused")
         with self.assertRaises(QgsProcessingException) as raised:
             self.alg._fetch_json("https://example.com/api", self.feedback, "test error")
-        self.assertIn("test error", str(raised.exception))
+        self.assertIn("test error: Connection refused", str(raised.exception))
 
-    @patch("data_loader.algorithm.urlopen")
-    def test_invalid_json_response(self, mock_urlopen):
-        mock_response = MagicMock()
-        mock_response.read.return_value = b"not json"
-        mock_response.__enter__ = MagicMock(return_value=mock_response)
-        mock_response.__exit__ = MagicMock(return_value=False)
-        mock_urlopen.return_value = mock_response
-
+    @patch("data_loader.algorithm.get_json")
+    def test_invalid_json_response(self, mock_get_json):
+        mock_get_json.side_effect = ValueError("Expecting value")
         with self.assertRaises(QgsProcessingException):
             self.alg._fetch_json("https://example.com/api", self.feedback, "parse")
 
-    def test_accepts_http_scheme(self):
-        with patch("data_loader.algorithm.urlopen") as mock_urlopen:
-            mock_response = MagicMock()
-            mock_response.read.return_value = b'{"ok": true}'
-            mock_response.__enter__ = MagicMock(return_value=mock_response)
-            mock_response.__exit__ = MagicMock(return_value=False)
-            mock_urlopen.return_value = mock_response
+    @patch("data_loader.algorithm.get_json")
+    def test_accepts_http_scheme(self, mock_get_json):
+        mock_get_json.return_value = {"ok": True}
+        result = self.alg._fetch_json("http://example.com/api", self.feedback, "test")
+        self.assertEqual(result, {"ok": True})
 
-            result = self.alg._fetch_json(
-                "http://example.com/api", self.feedback, "test"
-            )
-            self.assertEqual(result, {"ok": True})
-
-    @patch("data_loader.algorithm.urlopen")
-    def test_arcgis_error_response_raises(self, mock_urlopen):
+    @patch("data_loader.algorithm.get_json")
+    def test_arcgis_error_response_raises(self, mock_get_json):
         body = {"error": {"code": 499, "message": "Token Required"}}
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps(body).encode()
-        mock_response.__enter__ = MagicMock(return_value=mock_response)
-        mock_response.__exit__ = MagicMock(return_value=False)
-        mock_urlopen.return_value = mock_response
+        mock_get_json.return_value = body
 
         with self.assertRaises(QgsProcessingException) as raised:
             self.alg._fetch_json(

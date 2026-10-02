@@ -1,9 +1,7 @@
 import contextlib
-import json
 import os
 import re
 import tempfile
-from urllib.request import urlopen
 
 from qgis.core import (
     QgsCoordinateReferenceSystem,
@@ -25,6 +23,7 @@ from qgis.core import (
 from qgis.PyQt.QtCore import QCoreApplication
 
 from .feature_downloader import FeatureDownloader
+from .network import get_json
 from .settings_datasets import DATASETS
 from .settings_prefecture import PREFECTURE_NAMES_EN, PREFECTURES
 
@@ -180,11 +179,11 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
     def _fetch_json(self, url, feedback, error_context):
         try:
+            # Qt can also open file:// URLs, so only allow HTTP(S)
             if not url.startswith(("https://", "http://")):
                 raise ValueError(f"Unsupported URL scheme: {url}")
-            with urlopen(url) as response:  # noqa: S310  # nosec B310  # scheme validated above
-                data = json.loads(response.read().decode())
-        except Exception as e:
+            data = get_json(url, feedback)
+        except (OSError, ValueError) as e:
             raise QgsProcessingException(f"{error_context}: {e}") from e
 
         # ArcGIS reports errors such as "499 Token Required" in the JSON body

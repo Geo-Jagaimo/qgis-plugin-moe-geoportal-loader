@@ -25,7 +25,7 @@ class FakeService:
         self.transfer_limit = transfer_limit
         self.where_clauses = []
 
-    def __call__(self, url, params):
+    def __call__(self, url, params, feedback):
         if params.get("returnIdsOnly") == "true":
             return {"objectIdFieldName": "oid", "objectIds": list(self.object_ids)}
 
@@ -101,6 +101,20 @@ class TestFeatureDownloader(unittest.TestCase):
                         LAYER_URL, self.fields, Qgis.WkbType.Point, self.feedback
                     )
         self.assertEqual(failing.call_count, feature_downloader.RETRIES)
+
+    def test_canceled_request_is_not_retried(self):
+        def abort(url, params, feedback):
+            self.feedback.isCanceled.return_value = True
+            raise OSError("Operation canceled")
+
+        with patch.object(feature_downloader, "_get_json", side_effect=abort) as get:
+            with patch.object(feature_downloader.time, "sleep") as sleep:
+                downloader = FeatureDownloader(
+                    LAYER_URL, self.fields, Qgis.WkbType.Point, self.feedback
+                )
+        self.assertEqual(len(downloader), 0)
+        self.assertEqual(get.call_count, 1)
+        sleep.assert_not_called()
 
     def test_stops_when_canceled(self):
         self.feedback.isCanceled.side_effect = [False, True, True, True]

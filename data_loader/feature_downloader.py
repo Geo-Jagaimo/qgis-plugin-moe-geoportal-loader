@@ -8,14 +8,11 @@ pages in parallel, and converts them with the same functions as the provider.
 
 from __future__ import annotations
 
-import http.client
-import json
 import time
 from collections import deque
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future
 from itertools import islice
 from urllib.parse import urlencode
-from urllib.request import urlopen
 
 from qgis.core import (
     QgsArcGisRestUtils,
@@ -24,31 +21,64 @@ from qgis.core import (
     QgsProcessingException,
     QgsWkbTypes,
 )
-from qgis.PyQt.QtCore import QMetaType
+from qgis.PyQt.QtCore import QMetaType, QThreadPool
+
+from .network import get_json
 
 DEFAULT_PAGE_SIZE = 1000
 MAX_PAGE_SIZE = 2000
 WORKERS = 4
-TIMEOUT = 120
 RETRIES = 3
 
 
-def _get_json(url: str, params: dict) -> dict:
-    with urlopen(f"{url}?{urlencode(params)}", timeout=TIMEOUT) as response:  # noqa: S310  # nosec B310  # scheme validated by FeatureDownloader
-        return json.loads(response.read().decode())
+class _QThreadPoolExecutor:
+    """Runs jobs on QThreads, where Qt timers work, so the QGIS network timeout
+    also applies to them (it does not in threads started by Python)."""
+
+    def __init__(self, max_workers):
+        self._pool = QThreadPool()
+        self._pool.setMaxThreadCount(max_workers)
+
+    def submit(self, fn, *args):
+        future = Future()
+
+        def run():
+            if not future.set_running_or_notify_cancel():
+                return
+            try:
+                future.set_result(fn(*args))
+            except Exception as e:
+                future.set_exception(e)
+
+        self._pool.start(run)
+        return future
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        self._pool.clear()
+        self._pool.waitForDone()
 
 
-def _query(layer_url: str, params: dict) -> dict:
+def _get_json(url: str, params: dict, feedback) -> dict:
+    return get_json(f"{url}?{urlencode(params)}", feedback)
+
+
+def _query(layer_url: str, params: dict, feedback) -> dict:
     error = ""
     for attempt in range(RETRIES):
         try:
-            data = _get_json(f"{layer_url}/query", params)
-        except (OSError, ValueError, http.client.HTTPException) as e:
+            data = _get_json(f"{layer_url}/query", params, feedback)
+        except (OSError, ValueError) as e:
             error = str(e)
         else:
             if "error" not in data:
                 return data
             error = f"{data['error'].get('code')} {data['error'].get('message')}"
+        if feedback.isCanceled():
+            # The request was aborted on purpose; retrying would only delay the stop
+            return {}
         if attempt < RETRIES - 1:
             time.sleep(2**attempt)
     raise QgsProcessingException(
@@ -75,8 +105,12 @@ class FeatureDownloader:
             if field.type() in (QMetaType.Type.QDateTime, QMetaType.Type.QDate)
         ]
 
-        ids = _query(layer_url, {"where": "1=1", "returnIdsOnly": "true", "f": "json"})
-        self.oid_field = ids["objectIdFieldName"]
+        ids = _query(
+            layer_url,
+            {"where": "1=1", "returnIdsOnly": "true", "f": "json"},
+            feedback,
+        )
+        self.oid_field = ids.get("objectIdFieldName")
         self.object_ids = sorted(ids.get("objectIds") or [])
 
     def __len__(self):
@@ -87,7 +121,7 @@ class FeatureDownloader:
             self.object_ids[i : i + self.page_size]
             for i in range(0, len(self.object_ids), self.page_size)
         )
-        with ThreadPoolExecutor(WORKERS) as executor:
+        with _QThreadPoolExecutor(WORKERS) as executor:
             # Keep a bounded number of pages in flight so memory stays flat
             pending = deque(
                 executor.submit(self._fetch, batch)
@@ -116,6 +150,7 @@ class FeatureDownloader:
                 "returnM": "true" if self.has_m else "false",
                 "returnZ": "true" if self.has_z else "false",
             },
+            self.feedback,
         )
         if page.get("exceededTransferLimit") and len(object_ids) > 1:
             half = len(object_ids) // 2

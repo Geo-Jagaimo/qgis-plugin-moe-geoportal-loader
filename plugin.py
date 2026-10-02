@@ -10,6 +10,7 @@ from .data_loader.provider import MOELoaderProvider
 class MOEGeoportalLoader:
     def __init__(self, iface: QgisInterface):
         self.iface = iface
+        self.provider = None
         self.translator = None
 
         self.load_translator()
@@ -36,12 +37,18 @@ class MOEGeoportalLoader:
         else:
             print(f"Translation file not found: {qm_file}")
 
-    def initGui(self):
+    def initProcessing(self):
+        # qgis_process has no GUI: it only calls this, never initGui()
         self.provider = MOELoaderProvider()
         QgsApplication.processingRegistry().addProvider(self.provider)
 
+    def initGui(self):
+        self.initProcessing()
+
     def unload(self):
-        QgsApplication.processingRegistry().removeProvider(self.provider)
+        if self.provider is not None:
+            QgsApplication.processingRegistry().removeProvider(self.provider)
+            self.provider = None
 
         if self.translator:
             QCoreApplication.removeTranslator(self.translator)

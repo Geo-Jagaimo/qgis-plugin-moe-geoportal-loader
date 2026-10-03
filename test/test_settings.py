@@ -233,22 +233,21 @@ class TestAlgorithmIntegration(unittest.TestCase):
                                 f"{dataset_key}: URL formatting failed with KeyError: {e}"
                             )
 
-    def test_hokkaido_vg_50000_special_case(self):
-        """Test special handling for Hokkaido vg_50000 dataset"""
-        # Corresponds to processing at algorithm.py lines 100-101
-        if "vg_50000" in DATASETS:
-            dataset = DATASETS["vg_50000"]
-            self.assertTrue(
-                dataset["has_prefecture"],
-                "vg_50000 must be a prefecture-aware dataset",
-            )
-            # Verify that formatting works with Hokkaido code "01"
-            url_template = dataset["url"]
-            pref_name = PREFECTURE_NAMES_EN.get("01", "")
-            formatted_url = url_template.format(
-                pref_code="01_0420", pref_name=pref_name
-            )
-            self.assertIn("01_0420", formatted_url)
+    def test_vg_50000_url_for_prefecture(self):
+        """Verify that vg_50000 URLs point to the veg50000_{code}{name} services"""
+        expected = {
+            "01": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/veg50000_01hokkaido/FeatureServer",
+            "03": "https://svr-moej.gisservice.jp/arcgis/rest/services/Hosted/veg50000_03iwate/FeatureServer",
+        }
+        url_template = DATASETS["vg_50000"]["url"]
+        for pref_code, expected_url in expected.items():
+            with self.subTest(pref_code=pref_code):
+                self.assertEqual(
+                    url_template.format(
+                        pref_code=pref_code, pref_name=PREFECTURE_NAMES_EN[pref_code]
+                    ),
+                    expected_url,
+                )
 
     def test_dataset_count_reasonable(self):
         """Verify that dataset count is reasonable"""

@@ -14,7 +14,7 @@
 ## Features
 
 - Load environmental datasets directly from MOE GeoPortal into QGIS.
-- Automatic file and style saving when selecting a dataset and output destination.
+- Automatic file and style saving when selecting a dataset and output destination. The style is stored inside GeoPackage files, and as a `.qml` file next to other formats.
 - Optional loading as ArcGIS Feature Service layers.
 - Integrated into the QGIS Processing Toolbox.
 
@@ -57,6 +57,7 @@
 
 - This plugin is licensed under the [GNU General Public License v2.0](LICENSE).
 - The datasets loaded by this plugin are provided by MOE GeoPortal under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+- The vegetation map styles (`data_loader/styles/veg50000style.qml` and `veg2024style.qml`) are the [現存植生図1/50,000スタイル設定ファイル](https://geoportal.env.go.jp/content/0f214f1047444c158ec87d24be2d7224/about) and the [現存植生図2024スタイル設定ファイル](https://geoportal.env.go.jp/content/368329d069ab4e70a0b1938eb050ad07/about) published by the Biodiversity Center of Japan, Ministry of the Environment, used under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The plugin converts their RasterFill symbols to native QGIS symbols when applying them.
 
 ## Authors
 

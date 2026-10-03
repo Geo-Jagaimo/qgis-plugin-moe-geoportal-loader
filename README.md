@@ -20,12 +20,11 @@
 
 ## Datasets
 
-#### Vegetation Maps（11 datasets）
+#### Vegetation Maps（10 datasets）
 
 | Dataset                                    | Details                                                                     |
 | ------------------------------------------ | --------------------------------------------------------------------------- |
 | Existing Vegetation Map（1:50,000）        | by prefecture                                                               |
-| Naturalness Classification Map（1:50,000） | by prefecture                                                               |
 | Existing Vegetation Map 2024               | Hokkaido, Tohoku, Kanto, Hokuriku, Chubu, Kinki, Chushikoku, Kyushu-Okinawa |
 | Northern Territory Vegetation Overview Map |                                                                             |
 

@@ -1,8 +1,10 @@
-# MOE GeoPortal Loader
+# MOE Geoportal Loader
 
 [![English](https://img.shields.io/badge/English-blue)](README.md)
 [![環境ジオポータル](https://img.shields.io/badge/環境ジオポータル-forestgreen)](https://geoportal.env.go.jp/)
 [![QGIS公式プラグインリポジトリ](https://img.shields.io/badge/QGIS公式プラグインリポジトリ-green)](https://plugins.qgis.org/plugins/moe_geoportal_loader/)
+
+![](imgs/icon.png)
 
 ## 概要
 
@@ -49,7 +51,7 @@
 
 ## 動作環境
 
-- QGIS 3.40 以上
+- QGIS 3.44 以上
 
 ## ライセンス
 

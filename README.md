@@ -60,4 +60,4 @@
 
 ## Authors
 
-- [Keita Uemori](@Geo-Jagaimo)
+- [Keita Uemori](https://github.com/Geo-Jagaimo)

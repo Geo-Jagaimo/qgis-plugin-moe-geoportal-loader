@@ -730,6 +730,115 @@ class TestLayerLoading(_MockedServiceTestCase):
         self.alg._save_style_qml.assert_not_called()
 
 
+class TestStyleInOutput(_MockedServiceTestCase):
+    """A .qml next to a GeoPackage is shared by all of its tables, so the style
+    must be stored in the table itself."""
+
+    def setUp(self):
+        super().setUp()
+        self.out_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.out_dir)
+
+        # The real method, which saves the style of the stand-in service layer
+        self.style_files = []
+
+        def save_style_qml(*args):
+            qml_path = MOELoaderAlgorithm._save_style_qml(self.alg, *args)
+            self.style_files.append(qml_path)
+            return qml_path
+
+        self.alg._save_style_qml.side_effect = save_style_qml
+
+    def _save(self, output, color):
+        self.source.renderer().symbol().setColor(color)
+        return self._save_to_file({"OUTPUT": output})
+
+    @staticmethod
+    def _reopened_color(source):
+        # Keep a reference: the renderer is deleted along with its layer
+        layer = QgsVectorLayer(source, "reopened", "ogr")
+        return layer.renderer().symbol().color()
+
+    def _qml_files(self):
+        return [name for name in os.listdir(self.out_dir) if name.endswith(".qml")]
+
+    def test_tables_of_one_geopackage_keep_their_own_style(self):
+        gpkg = os.path.join(self.out_dir, "two.gpkg")
+        self._save(gpkg, QColor(255, 0, 0))
+        self._save(f"ogr:dbname='{gpkg}' table=\"second\" (geom)", QColor(0, 0, 255))
+
+        self.assertEqual(
+            self._reopened_color(f"{gpkg}|layername=two"), QColor(255, 0, 0)
+        )
+        self.assertEqual(
+            self._reopened_color(f"{gpkg}|layername=second"), QColor(0, 0, 255)
+        )
+        self.assertEqual(self._qml_files(), [])
+        self.feedback.reportError.assert_not_called()
+
+    def test_temporary_style_file_is_removed(self):
+        self._save(os.path.join(self.out_dir, "out.gpkg"), QColor(255, 0, 0))
+
+        self.assertEqual(len(self.style_files), 1)
+        self.assertFalse(os.path.exists(self.style_files[0]))
+
+    def test_loaded_geopackage_output_gets_the_style(self):
+        gpkg = os.path.join(self.out_dir, "out.gpkg")
+        output = QgsProcessingOutputLayerDefinition(gpkg, QgsProject.instance())
+        dest_id = self._save(output, QColor(1, 2, 3))
+
+        details = self.context.layerToLoadOnCompletionDetails(dest_id)
+        loaded = QgsVectorLayer("Point?crs=EPSG:4326", "loaded", "memory")
+        details.postProcessor().postProcessLayer(loaded, self.context, self.feedback)
+        self.assertEqual(loaded.renderer().symbol().color(), QColor(1, 2, 3))
+        self.assertFalse(os.path.exists(details.postProcessor().qml_path))
+        self.assertEqual(self._qml_files(), [])
+
+    def test_other_formats_keep_the_style_next_to_the_file(self):
+        shp = os.path.join(self.out_dir, "out.shp")
+        self._save(shp, QColor(0, 128, 0))
+
+        self.assertEqual(self._qml_files(), ["out.qml"])
+        self.assertEqual(self._reopened_color(shp), QColor(0, 128, 0))
+
+
+class TestSaveStyleInOutput(unittest.TestCase):
+    """_save_style_in_output must work on every QGIS 3.44 and report failures."""
+
+    def setUp(self):
+        self.alg = MOELoaderAlgorithm()
+        self.feedback = MagicMock()
+
+    @staticmethod
+    def _layer(save_method):
+        layer = MagicMock(spec=["loadNamedStyle", "source", save_method])
+        layer.loadNamedStyle.return_value = ("", True)
+        return layer
+
+    def test_uses_the_older_api_on_qgis_3_44_0(self):
+        layer = self._layer("saveStyleToDatabase")
+        layer.saveStyleToDatabase.return_value = ""
+
+        self.alg._save_style_in_output(layer, "style.qml", "name", self.feedback)
+        layer.saveStyleToDatabase.assert_called_once_with("name", "", True, "")
+        self.feedback.reportError.assert_not_called()
+
+    def test_reports_a_style_that_could_not_be_stored(self):
+        layer = self._layer("saveStyleToDatabaseV2")
+        layer.saveStyleToDatabaseV2.return_value = (None, "database is locked")
+
+        self.alg._save_style_in_output(layer, "style.qml", "name", self.feedback)
+        self.feedback.reportError.assert_called_once()
+
+    def test_reports_a_style_that_could_not_be_read(self):
+        layer = self._layer("saveStyleToDatabaseV2")
+        layer.loadNamedStyle.return_value = ("broken QML", False)
+
+        self.alg._save_style_in_output(layer, "style.qml", "name", self.feedback)
+        layer.saveStyleToDatabaseV2.assert_not_called()
+        self.feedback.reportError.assert_called_once()
+
+
 class TestStylePostProcessor(unittest.TestCase):
     """_StylePostProcessor must apply the QML and report the actual outcome."""
 

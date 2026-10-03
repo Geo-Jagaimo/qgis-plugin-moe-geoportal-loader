@@ -4,6 +4,7 @@ import re
 import tempfile
 
 from qgis.core import (
+    Qgis,
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
     QgsFeature,
@@ -402,22 +403,67 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         if not (is_file_output or will_load):
             return dest_id
 
-        qml_path = self._save_style_qml(
-            vector_layer, output_path, dataset_key, is_file_output, feedback
+        layer_name = self._build_layer_name(dataset, has_prefecture, pref_idx)
+        # A .qml next to the output belongs to the whole file, so the tables of
+        # one GeoPackage would overwrite each other's style: when the format
+        # can, store the style in the table itself
+        output_layer = (
+            self._open_style_storing_output(dest_id) if is_file_output else None
         )
+        next_to_output = is_file_output and output_layer is None
+        qml_path = self._save_style_qml(
+            vector_layer, output_path, dataset_key, next_to_output, feedback
+        )
+        if qml_path and output_layer is not None:
+            self._save_style_in_output(output_layer, qml_path, layer_name, feedback)
+
         if will_load:
             details = context.layerToLoadOnCompletionDetails(dest_id)
-            details.name = self._build_layer_name(dataset, has_prefecture, pref_idx)
+            details.name = layer_name
             if qml_path:
                 details.setPostProcessor(
-                    _StylePostProcessor(qml_path, remove_after=not is_file_output)
+                    _StylePostProcessor(qml_path, remove_after=not next_to_output)
                 )
+        elif qml_path and not next_to_output:
+            with contextlib.suppress(OSError):
+                os.remove(qml_path)
         return dest_id
 
+    def _open_style_storing_output(self, dest_id):
+        """The output layer if its format can store styles, as GeoPackage can."""
+        options = QgsVectorLayer.LayerOptions()
+        options.loadDefaultStyle = False
+        output_layer = QgsVectorLayer(dest_id, "output", "ogr", options)
+        if output_layer.isValid() and (
+            output_layer.dataProvider().styleStorageCapabilities()
+            & Qgis.ProviderStyleStorageCapability.SaveToDatabase
+        ):
+            return output_layer
+        return None
+
+    def _save_style_in_output(self, output_layer, qml_path, style_name, feedback):
+        message, ok = output_layer.loadNamedStyle(qml_path)
+        if ok:
+            # Stored as the table's default style, which QGIS applies when opening it
+            if hasattr(output_layer, "saveStyleToDatabaseV2"):
+                _, message = output_layer.saveStyleToDatabaseV2(
+                    style_name, "", True, ""
+                )
+            else:  # QGIS 3.44.0
+                message = output_layer.saveStyleToDatabase(style_name, "", True, "")
+            ok = not message
+
+        if ok:
+            feedback.pushInfo(f"Saved style in the output: {output_layer.source()}")
+        else:
+            feedback.reportError(
+                f"Failed to save style in {output_layer.source()}: {message}"
+            )
+
     def _save_style_qml(
-        self, vector_layer, output_path, dataset_key, is_file_output, feedback
+        self, vector_layer, output_path, dataset_key, next_to_output, feedback
     ):
-        if is_file_output:
+        if next_to_output:
             base, _ = os.path.splitext(output_path)
             qml_path = base + ".qml"
         else:
@@ -443,7 +489,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             return qml_path
 
         feedback.reportError(f"Failed to save style to {qml_path}: {message}")
-        if not is_file_output:
+        if not next_to_output:
             with contextlib.suppress(OSError):
                 os.remove(qml_path)
         return None

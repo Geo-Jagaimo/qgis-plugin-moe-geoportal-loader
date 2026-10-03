@@ -14,7 +14,7 @@
 ## Features
 
 - Load environmental datasets directly from MOE GeoPortal into QGIS.
-- Automatic file and style saving when selecting a dataset and output destination.
+- Automatic file and style saving when selecting a dataset and output destination. The style is stored inside GeoPackage files, and as a `.qml` file next to other formats.
 - Optional loading as ArcGIS Feature Service layers.
 - Integrated into the QGIS Processing Toolbox.
 

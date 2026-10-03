@@ -1,8 +1,10 @@
-# MOE GeoPortal Loader
+# MOE Geoportal Loader
 
 [![English](https://img.shields.io/badge/English-blue)](README.md)
 [![環境ジオポータル](https://img.shields.io/badge/環境ジオポータル-forestgreen)](https://geoportal.env.go.jp/)
 [![QGIS公式プラグインリポジトリ](https://img.shields.io/badge/QGIS公式プラグインリポジトリ-green)](https://plugins.qgis.org/plugins/moe_geoportal_loader/)
+
+![](imgs/icon.png)
 
 ## 概要
 
@@ -18,14 +20,13 @@
 
 ## データセット
 
-#### 植生図（11 データセット）
+#### 植生図（10 データセット）
 
-| データセット             | 詳細                                                   |
-| ------------------------ | ------------------------------------------------------ |
-| 現存植生図（1/50,000）   | 都道府県別                                             |
-| 自然度区分図（1/50,000） | 都道府県別                                             |
-| 現存植生図 2024          | 北海道、東北、関東、北陸、中部、近畿、中四国、九州沖縄 |
-| 北方領土植生概況図       |                                                        |
+| データセット           | 詳細                                                   |
+| ---------------------- | ------------------------------------------------------ |
+| 現存植生図（1/50,000） | 都道府県別                                             |
+| 現存植生図 2024        | 北海道、東北、関東、北陸、中部、近畿、中四国、九州沖縄 |
+| 北方領土植生概況図     |                                                        |
 
 #### 哺乳類分布調査（4 データセット）
 
@@ -50,7 +51,7 @@
 
 ## 動作環境
 
-- QGIS 3.40 以上
+- QGIS 3.44 以上
 
 ## ライセンス
 
@@ -59,4 +60,4 @@
 
 ## 開発者
 
-- [Keita Uemori](@Geo-Jagaimo)
+- [Keita Uemori](https://github.com/Geo-Jagaimo)

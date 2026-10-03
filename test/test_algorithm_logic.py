@@ -458,17 +458,17 @@ class TestGetBundledQml(unittest.TestCase):
         result = self.alg._get_bundled_qml("nonexistent_dataset_key_xyz")
         self.assertIsNone(result)
 
-    def test_returns_path_for_existing_style(self):
-        styles_dir = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), "data_loader", "styles"
-        )
-        if os.path.isdir(styles_dir):
-            qml_files = [f for f in os.listdir(styles_dir) if f.endswith(".qml")]
-            if qml_files:
-                key = qml_files[0].replace(".qml", "")
+    def test_vegetation_maps_use_the_official_styles(self):
+        expected = {"vg_50000": "veg50000style.qml"}
+        expected.update({f"veg2024bk{i}": "veg2024style.qml" for i in range(1, 9)})
+        for key, style in expected.items():
+            with self.subTest(dataset=key):
                 result = self.alg._get_bundled_qml(key)
-                self.assertIsNotNone(result)
-                self.assertTrue(os.path.exists(result))  # type: ignore
+                self.assertEqual(os.path.basename(result), style)
+                self.assertTrue(os.path.exists(result))
+
+    def test_returns_none_for_dataset_without_style(self):
+        self.assertIsNone(self.alg._get_bundled_qml("so4"))
 
     def test_returns_none_for_none_key(self):
         result = self.alg._get_bundled_qml(None)

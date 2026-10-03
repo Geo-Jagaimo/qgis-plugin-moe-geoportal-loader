@@ -1,3 +1,4 @@
+import os
 import re
 import unittest
 
@@ -119,6 +120,19 @@ class TestDatasets(unittest.TestCase):
                         set(),
                         unexpected,
                         f"{dataset_key}: URL contains unexpected placeholders: {unexpected}",
+                    )
+
+    def test_dataset_style_files_exist(self):
+        """Verify that the style file of each dataset is bundled"""
+        styles_dir = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "data_loader", "styles"
+        )
+        for dataset_key, dataset in DATASETS.items():
+            if "style" in dataset:
+                with self.subTest(dataset=dataset_key):
+                    self.assertTrue(
+                        os.path.isfile(os.path.join(styles_dir, dataset["style"])),
+                        f"{dataset_key}: style file {dataset['style']} is missing",
                     )
 
 

@@ -57,6 +57,7 @@
 
 - このプラグインは [GNU General Public License v2.0](LICENSE) の下で公開されています。
 - プラグインを介して読み込めるデータセットは、環境ジオポータルより [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) で提供されています。
+- 植生図のスタイル（`data_loader/styles/veg50000style.qml`、`veg2024style.qml`）は、環境省 生物多様性センターが公開している「[現存植生図1/50,000スタイル設定ファイル](https://geoportal.env.go.jp/content/0f214f1047444c158ec87d24be2d7224/about)」「[現存植生図2024スタイル設定ファイル](https://geoportal.env.go.jp/content/368329d069ab4e70a0b1938eb050ad07/about)」を [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) に従って利用しています。適用時に RasterFill シンボルを QGIS 標準のシンボルに変換しています。
 
 ## 開発者
 

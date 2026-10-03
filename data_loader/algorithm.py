@@ -495,8 +495,12 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         return None
 
     def _get_bundled_qml(self, dataset_key):
-        styles_dir = os.path.join(os.path.dirname(__file__), "styles")
-        qml_path = os.path.join(styles_dir, f"{dataset_key}.qml")
+        # The official style files keep their published names, so several
+        # datasets can share one, like the eight blocks of the 2024 map
+        style = DATASETS.get(dataset_key, {}).get("style")
+        if not style:
+            return None
+        qml_path = os.path.join(os.path.dirname(__file__), "styles", style)
         if os.path.exists(qml_path):
             return qml_path
         return None

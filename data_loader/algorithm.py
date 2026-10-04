@@ -130,6 +130,17 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
 
         return super().checkParameterValues(parameters, context)
 
+    def createCustomParametersWidget(self, parent=None):
+        # Imported only when needed: qgis_process, which also loads this
+        # module, has no GUI
+        try:
+            from .dialog import MOELoaderDialog
+        except ImportError:
+            # The Processing plugin may rename its dialog again (see dialog.py):
+            # QGIS then opens its own dialog, where the prefecture is always enabled
+            return None
+        return MOELoaderDialog(self, parent=parent)
+
     def processAlgorithm(self, parameters, context, feedback):
         dataset_idx = self.parameterAsEnum(parameters, self.CATEGORY, context)
         dataset_key, has_prefecture = self._dataset_mapping[dataset_idx]

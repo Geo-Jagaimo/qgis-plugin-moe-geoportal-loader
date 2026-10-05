@@ -28,9 +28,6 @@ from data_loader.algorithm import MOELoaderAlgorithm, _StylePostProcessor
 from data_loader.settings_datasets import DATASETS
 from data_loader.settings_prefecture import PREFECTURES
 
-# Check if PROJ database is available for CRS tests
-_CRS_AVAILABLE = QgsCoordinateReferenceSystem.fromEpsgId(4326).isValid()
-
 
 class TestExtractOutputPath(unittest.TestCase):
     """Tests for MOELoaderAlgorithm._extract_output_path"""
@@ -225,9 +222,17 @@ class TestCrsFromEsriSpatialRefLogic(unittest.TestCase):
             self.assertIsNone(crs)
 
 
-@unittest.skipUnless(_CRS_AVAILABLE, "PROJ database not available")
 class TestCrsFromEsriSpatialRefIntegration(unittest.TestCase):
     """Integration tests using real CRS creation (requires PROJ database)."""
+
+    @classmethod
+    def setUpClass(cls):
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        start_app()
+        # Not at import time: until QGIS starts, PROJ may not find its database
+        # (QGIS.app on macOS), and QGIS then keeps EPSG:4326 invalid for the run
+        if not QgsCoordinateReferenceSystem.fromEpsgId(4326).isValid():
+            raise unittest.SkipTest("PROJ database not available")
 
     def setUp(self):
         self.alg = MOELoaderAlgorithm()

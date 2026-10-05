@@ -148,8 +148,7 @@ class _LayerHandler(http.server.BaseHTTPRequestHandler):
             "ymin": 1,
             "xmax": 3,
             "ymax": 3,
-            # JGD2000, like the vegetation maps. Not EPSG:4326, which QGIS
-            # keeps invalid once a module has created it before start_app()
+            # JGD2000, like the vegetation maps
             "spatialReference": {"wkid": 4612},
         },
         "fields": [{"name": "oid", "type": "esriFieldTypeOID", "alias": "oid"}],

@@ -1,9 +1,11 @@
 import http.server
+import json
 import os
 import threading
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+from urllib.parse import parse_qsl
 
 from qgis.core import (
     Qgis,
@@ -11,11 +13,13 @@ from qgis.core import (
     QgsFields,
     QgsNetworkAccessManager,
     QgsProcessingException,
+    QgsRectangle,
 )
 from qgis.PyQt.QtCore import QThreadPool
 from qgis.testing import start_app
 
 from data_loader import feature_downloader
+from data_loader.algorithm import MOELoaderAlgorithm
 from data_loader.feature_downloader import FeatureDownloader
 from data_loader.network import get_json
 
@@ -129,6 +133,96 @@ class TestGetJson(unittest.TestCase):
         self.assertTrue(pool.waitForDone(10000))
         self.assertIn("error", outcome)
         self.assertLess(time.monotonic() - started, 4)
+
+
+class _LayerHandler(http.server.BaseHTTPRequestHandler):
+    """An ArcGIS point layer whose features 1 to 3 lie at (1, 1), (2, 2) and (3, 3)."""
+
+    LAYER = {
+        "name": "layer",
+        "type": "Feature Layer",
+        "geometryType": "esriGeometryPoint",
+        "capabilities": "Query",
+        "extent": {
+            "xmin": 1,
+            "ymin": 1,
+            "xmax": 3,
+            "ymax": 3,
+            # JGD2000, like the vegetation maps. Not EPSG:4326, which QGIS
+            # keeps invalid once a module has created it before start_app()
+            "spatialReference": {"wkid": 4612},
+        },
+        "fields": [{"name": "oid", "type": "esriFieldTypeOID", "alias": "oid"}],
+    }
+
+    def do_GET(self):
+        path, _, query = self.path.partition("?")
+        params = dict(parse_qsl(query))
+        if path == "/layer":
+            body = self.LAYER
+        elif path == "/layer/query" and params.get("returnIdsOnly") == "true":
+            self.server.id_queries.append(params)
+            ids = [1, 2, 3]
+            if "geometry" in params:
+                xmin, ymin, xmax, ymax = map(float, params["geometry"].split(","))
+                ids = [i for i in ids if xmin <= i <= xmax and ymin <= i <= ymax]
+            body = {"objectIdFieldName": "oid", "objectIds": ids}
+        else:
+            self.send_error(404)
+            return
+        data = json.dumps(body).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(data)
+
+    def log_message(self, *args):
+        pass
+
+
+class TestArcGisLayerExtent(unittest.TestCase):
+    """The ArcGIS provider of QGIS must request only the features in the extent."""
+
+    @classmethod
+    def setUpClass(cls):
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        start_app()
+        cls.server = _QuietServer(("127.0.0.1", 0), _LayerHandler)
+        cls.server.id_queries = []
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.layer_url = f"http://127.0.0.1:{cls.server.server_address[1]}/layer"
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+
+    def _feature_count(self, extent=None):
+        self.server.id_queries.clear()
+        layer = MOELoaderAlgorithm()._create_arcgis_vector_layer(
+            self.layer_url, "layer", MagicMock(), extent=extent
+        )
+        # QGIS 4 requests the IDs only once it needs them
+        count = layer.featureCount()
+        self.assertEqual(len(self.server.id_queries), 1)
+        return count, self.server.id_queries[0]
+
+    def test_layer_has_only_the_features_in_the_extent(self):
+        count, query = self._feature_count(QgsRectangle(1.5, 1.5, 3.5, 3.5))
+
+        # QGIS formats the numbers its own way, such as 1.500000
+        envelope = [float(value) for value in query["geometry"].split(",")]
+        self.assertEqual(envelope, [1.5, 1.5, 3.5, 3.5])
+        self.assertEqual(query["geometryType"], "esriGeometryEnvelope")
+        self.assertEqual(count, 2)
+
+    def test_layer_without_extent_has_every_feature(self):
+        count, query = self._feature_count()
+
+        self.assertNotIn("geometry", query)
+        self.assertEqual(count, 3)
 
 
 if __name__ == "__main__":

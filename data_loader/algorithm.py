@@ -7,6 +7,7 @@ from qgis.core import (
     Qgis,
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
+    QgsCsException,
     QgsFeature,
     QgsFeatureSink,
     QgsField,
@@ -18,12 +19,13 @@ from qgis.core import (
     QgsProcessingParameterBoolean,
     QgsProcessingParameterCrs,
     QgsProcessingParameterEnum,
+    QgsProcessingParameterExtent,
     QgsProcessingParameterFeatureSink,
     QgsVectorLayer,
 )
 from qgis.PyQt.QtCore import QCoreApplication
 
-from .feature_downloader import FeatureDownloader
+from .feature_downloader import FeatureDownloader, envelope
 from .network import get_json
 from .settings_datasets import DATASETS
 from .settings_prefecture import PREFECTURE_NAMES_EN, PREFECTURES
@@ -56,6 +58,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
     DATASET = "DATASET"
     CATEGORY = "CATEGORY"
     PREFECTURE = "PREFECTURE"
+    EXTENT = "EXTENT"
     CRS = "CRS"
     ADD_AS_ARCGIS_LAYER = "ADD_AS_ARCGIS_LAYER"
     OUTPUT = "OUTPUT"
@@ -88,6 +91,15 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
                 self.PREFECTURE,
                 self.tr("Prefectures"),
                 options=prefecture_names,
+                optional=True,
+                defaultValue=None,
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterExtent(
+                self.EXTENT,
+                self.tr("Extent to load"),
                 optional=True,
                 defaultValue=None,
             )
@@ -127,6 +139,12 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             raw_value = parameters.get(self.PREFECTURE)
             if raw_value is None or raw_value == "":
                 return False, self.tr("Please select a prefecture.")
+
+        if parameters.get(self.EXTENT) not in (None, ""):
+            extent = self.parameterAsExtent(parameters, self.EXTENT, context)
+            # The service ignores an extent without area and returns every feature
+            if not extent.isNull() and extent.isEmpty():
+                return False, self.tr("The extent must have a width and a height.")
 
         return super().checkParameterValues(parameters, context)
 
@@ -236,14 +254,20 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             layer_name = f"{prefecture_name}_{layer_name}"
         return layer_name
 
-    def _create_arcgis_vector_layer(self, layer_url, layer_name, feedback):
+    def _create_arcgis_vector_layer(self, layer_url, layer_name, feedback, extent=None):
         uri = f"url='{layer_url}'"
+        if extent is not None:
+            # QGIS then requests only the features whose bounding box
+            # intersects the extent, which must be in the CRS of the service
+            uri += f" bbox='{envelope(extent)}'"
         vector_layer = QgsVectorLayer(uri, layer_name, "arcgisfeatureserver")
         if not vector_layer.isValid():
             raise QgsProcessingException(f"Failed to load layer (URL: {layer_url})")
         return vector_layer
 
-    def _open_feature_stream(self, layer_url, vector_layer, layer_meta, feedback):
+    def _open_feature_stream(
+        self, layer_url, vector_layer, layer_meta, feedback, extent=None
+    ):
         # Much faster than vector_layer.getFeatures(), which fetches 100 at a time
         return FeatureDownloader(
             layer_url,
@@ -251,28 +275,63 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
             vector_layer.wkbType(),
             feedback,
             page_size=layer_meta.get("maxRecordCount"),
+            extent=extent,
         )
 
-    def _set_vector_layer_crs(self, vector_layer, service_meta, layer_meta, feedback):
+    def _service_crs(self, service_meta, layer_meta, feedback):
+        """The CRS the service data is in, invalid when unknown."""
         extent_ref = (layer_meta.get("extent") or {}).get("spatialReference")
         layer_ref = layer_meta.get("spatialReference")
         service_ref = service_meta.get("spatialReference", {})
         spatial_ref = extent_ref or layer_ref or service_ref
 
         esri_crs = self._crs_from_esri_spatial_ref(spatial_ref, feedback)
+        if esri_crs and esri_crs.isValid():
+            return esri_crs
+        return QgsCoordinateReferenceSystem()
 
+    def _set_vector_layer_crs(self, vector_layer, service_crs, feedback):
         # Only the CRS the service data is in: setCrs() relabels coordinates
         # without reprojecting them, so the user-specified CRS must not go here.
-        if esri_crs and esri_crs.isValid():
-            layer_crs = esri_crs
-            feedback.pushInfo(f"Using ESRI-defined CRS: {layer_crs.authid()}")
+        if service_crs.isValid():
+            feedback.pushInfo(f"Using ESRI-defined CRS: {service_crs.authid()}")
         else:
             feedback.pushInfo(
                 f"No valid CRS found, using layer default: {vector_layer.crs().authid()}"
             )
             return
 
-        vector_layer.setCrs(layer_crs)
+        vector_layer.setCrs(service_crs)
+
+    def _download_extent(self, parameters, context, service_crs, feedback):
+        """The extent to load in the CRS of the service, or None to load everything."""
+        extent = self.parameterAsExtent(parameters, self.EXTENT, context)
+        if extent.isNull():
+            return None
+
+        extent_crs = self.parameterAsExtentCrs(parameters, self.EXTENT, context)
+        if extent_crs.isValid() and extent_crs != service_crs:
+            if not service_crs.isValid():
+                raise QgsProcessingException(
+                    "Cannot use the extent: the source CRS is unknown."
+                )
+            transform = QgsCoordinateTransform(
+                extent_crs, service_crs, context.transformContext()
+            )
+            # Like QGIS for extents: a bounding box needs no accurate transformation
+            transform.setBallparkTransformsAreAppropriate(True)
+            try:
+                extent = transform.transformBoundingBox(extent)
+            except QgsCsException as e:
+                raise QgsProcessingException(
+                    f"Cannot transform the extent to {service_crs.authid()}: {e}"
+                ) from e
+
+        feedback.pushInfo(
+            f"Loading the features intersecting the extent: {extent.toString(-1)}"
+            f" ({service_crs.authid() or 'source CRS'})"
+        )
+        return extent
 
     def _extract_output_path(self, dest_id):
         dest_str = dest_id or ""
@@ -291,10 +350,16 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         layer_url, service_meta, layer_meta = self._resolve_layer_url_and_meta(
             url, feedback
         )
+        service_crs = self._service_crs(service_meta, layer_meta, feedback)
+        extent = self._download_extent(parameters, context, service_crs, feedback)
         layer_name = self._build_layer_name(dataset, has_prefecture, pref_idx)
-        vector_layer = self._create_arcgis_vector_layer(layer_url, layer_name, feedback)
+        vector_layer = self._create_arcgis_vector_layer(
+            layer_url, layer_name, feedback, extent=extent
+        )
 
-        self._set_vector_layer_crs(vector_layer, service_meta, layer_meta, feedback)
+        self._set_vector_layer_crs(vector_layer, service_crs, feedback)
+        if extent is not None and vector_layer.featureCount() == 0:
+            feedback.pushWarning("No features intersect the extent.")
 
         param_crs = self.parameterAsCrs(parameters, self.CRS, context)
         if param_crs.isValid() and param_crs != vector_layer.crs():
@@ -329,9 +394,15 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         layer_url, service_meta, layer_meta = self._resolve_layer_url_and_meta(
             url, feedback
         )
-        vector_layer = self._create_arcgis_vector_layer(layer_url, "temp", feedback)
+        service_crs = self._service_crs(service_meta, layer_meta, feedback)
+        extent = self._download_extent(parameters, context, service_crs, feedback)
+        # QGIS requests the IDs of all the features when it opens the layer:
+        # limit that to the extent as well
+        vector_layer = self._create_arcgis_vector_layer(
+            layer_url, "temp", feedback, extent=extent
+        )
 
-        self._set_vector_layer_crs(vector_layer, service_meta, layer_meta, feedback)
+        self._set_vector_layer_crs(vector_layer, service_crs, feedback)
 
         source_crs = vector_layer.crs()
         param_crs = self.parameterAsCrs(parameters, self.CRS, context)
@@ -375,9 +446,11 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         )
 
         features = self._open_feature_stream(
-            layer_url, vector_layer, layer_meta, feedback
+            layer_url, vector_layer, layer_meta, feedback, extent=extent
         )
         total = len(features)
+        if extent is not None and total == 0:
+            feedback.pushWarning("No features intersect the extent.")
         feedback.pushInfo(f"Writing {total} features to output...")
 
         processed = 0
@@ -549,6 +622,7 @@ class MOELoaderAlgorithm(QgsProcessingAlgorithm):
         return self.tr(
             'This is a plugin to directly load data from the "<a href="https://geoportal.env.go.jp/">Environmental GeoPortal</a>," a geospatial information portal site provided by the Ministry of the Environment, into QGIS.\n'
             "When you select the dataset and output destination, the file and style settings are automatically saved.\n"
+            "If you specify an extent to load, such as a rectangle drawn on the map canvas or the extent of a layer, only the features intersecting it are downloaded.\n"
             "If necessary, it can be loaded as an ArcGIS Feature Service layer."
         )
 

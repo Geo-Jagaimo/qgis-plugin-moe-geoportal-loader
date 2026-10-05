@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from qgis.core import (
+    Qgis,
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
     QgsCoordinateTransformContext,
@@ -14,13 +15,17 @@ from qgis.core import (
     QgsProcessingContext,
     QgsProcessingException,
     QgsProcessingOutputLayerDefinition,
+    QgsProcessingParameterExtent,
     QgsProject,
+    QgsRectangle,
+    QgsReferencedRectangle,
     QgsVectorLayer,
 )
 from qgis.PyQt.QtGui import QColor
 from qgis.testing import start_app
 
 from data_loader.algorithm import MOELoaderAlgorithm, _StylePostProcessor
+from data_loader.settings_datasets import DATASETS
 from data_loader.settings_prefecture import PREFECTURES
 
 # Check if PROJ database is available for CRS tests
@@ -418,6 +423,60 @@ class TestCheckParameterValues(unittest.TestCase):
                 self.assertTrue(ok)
 
 
+class TestExtentParameter(unittest.TestCase):
+    """The optional extent to load, which the service ignores when it has no area."""
+
+    @classmethod
+    def setUpClass(cls):
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        start_app()
+
+    def setUp(self):
+        self.alg = MOELoaderAlgorithm()
+        self.alg.initAlgorithm()
+        self.context = QgsProcessingContext()
+
+    def _check(self, extent):
+        parameters = {
+            "CATEGORY": list(DATASETS).index("anaguma"),
+            "EXTENT": extent,
+            "OUTPUT": "TEMPORARY_OUTPUT",
+        }
+        return self.alg.checkParameterValues(parameters, self.context)
+
+    def test_optional_extent_comes_right_before_the_output_crs(self):
+        names = [definition.name() for definition in self.alg.parameterDefinitions()]
+        self.assertLess(names.index("PREFECTURE"), names.index("EXTENT"))
+        self.assertEqual(names[names.index("EXTENT") + 1], "CRS")
+
+        definition = self.alg.parameterDefinition("EXTENT")
+        self.assertIsInstance(definition, QgsProcessingParameterExtent)
+        self.assertTrue(definition.flags() & Qgis.ProcessingParameterFlag.Optional)
+
+    def test_rejects_an_extent_without_area(self):
+        for extent in (
+            "139.7,139.7,35.6,35.7 [EPSG:4326]",
+            "139.6,139.7,35.7,35.7 [EPSG:4326]",
+            QgsReferencedRectangle(
+                QgsRectangle(1, 2, 1, 4), QgsCoordinateReferenceSystem("EPSG:3857")
+            ),
+        ):
+            with self.subTest(extent=extent):
+                ok, message = self._check(extent)
+                self.assertFalse(ok)
+                self.assertTrue(message)
+
+    def test_accepts_an_extent_with_area(self):
+        ok, message = self._check("139.6,139.7,35.6,35.7 [EPSG:4326]")
+        self.assertTrue(ok, message)
+
+    def test_accepts_no_extent(self):
+        for extent in (None, ""):
+            with self.subTest(extent=extent):
+                ok, message = self._check(extent)
+                self.assertTrue(ok, message)
+
+
 class TestAlgorithmIdentity(unittest.TestCase):
     """Tests for algorithm identity methods"""
 
@@ -541,6 +600,22 @@ class TestCreateArcgisVectorLayer(unittest.TestCase):
         )
 
     @patch("data_loader.algorithm.QgsVectorLayer")
+    def test_limits_the_layer_to_the_extent(self, mock_layer_cls):
+        mock_layer_cls.return_value.isValid.return_value = True
+
+        self.alg._create_arcgis_vector_layer(
+            "https://example.com/FeatureServer/0",
+            "test_layer",
+            self.feedback,
+            extent=QgsRectangle(139.69, 35.65, 139.78, 35.72),
+        )
+        mock_layer_cls.assert_called_once_with(
+            "url='https://example.com/FeatureServer/0' bbox='139.69,35.65,139.78,35.72'",
+            "test_layer",
+            "arcgisfeatureserver",
+        )
+
+    @patch("data_loader.algorithm.QgsVectorLayer")
     def test_raises_when_invalid(self, mock_layer_cls):
         mock_layer = MagicMock()
         mock_layer.isValid.return_value = False
@@ -656,6 +731,94 @@ class TestOutputCrs(_MockedServiceTestCase):
         self._load_as_arcgis_layer({"CRS": "EPSG:6691"})
 
         self.assertEqual(self.source.crs().authid(), self.SOURCE_CRS)
+        self.feedback.pushWarning.assert_called_once()
+
+
+class TestExtent(_MockedServiceTestCase):
+    """Only the features in the extent are requested, in the CRS of the service."""
+
+    # Around the feature of the stand-in service
+    IN_SOURCE_CRS = "139.8,139.9,33.1,33.2 [EPSG:4612]"
+    WEB_MERCATOR = QgsRectangle(15570000, 3917000, 15572000, 3919000)
+
+    def _requested_extents(self):
+        return [
+            mock.call_args.kwargs["extent"]
+            for mock in (
+                self.alg._create_arcgis_vector_layer,
+                self.alg._open_feature_stream,
+            )
+        ]
+
+    def test_extent_is_transformed_to_the_service_crs(self):
+        r = self.WEB_MERCATOR
+        extent = (
+            f"{r.xMinimum()},{r.xMaximum()},{r.yMinimum()},{r.yMaximum()} [EPSG:3857]"
+        )
+        self._save_to_file({"EXTENT": extent, "OUTPUT": "TEMPORARY_OUTPUT"})
+
+        expected = QgsCoordinateTransform(
+            QgsCoordinateReferenceSystem("EPSG:3857"),
+            QgsCoordinateReferenceSystem(self.SOURCE_CRS),
+            QgsCoordinateTransformContext(),
+        ).transformBoundingBox(self.WEB_MERCATOR)
+        for requested in self._requested_extents():
+            self.assertTrue(
+                requested.contains(QgsPointXY(self.SOURCE_X, self.SOURCE_Y))
+            )
+            for name in ("xMinimum", "yMinimum", "xMaximum", "yMaximum"):
+                self.assertAlmostEqual(
+                    getattr(requested, name)(), getattr(expected, name)(), places=7
+                )
+
+    def test_extent_in_the_service_crs_is_used_as_is(self):
+        self._save_to_file({"EXTENT": self.IN_SOURCE_CRS, "OUTPUT": "TEMPORARY_OUTPUT"})
+
+        for requested in self._requested_extents():
+            self.assertEqual(requested, QgsRectangle(139.8, 33.1, 139.9, 33.2))
+
+    def test_arcgis_layer_is_limited_to_the_extent(self):
+        self._load_as_arcgis_layer({"EXTENT": self.IN_SOURCE_CRS})
+
+        requested = self.alg._create_arcgis_vector_layer.call_args.kwargs["extent"]
+        self.assertEqual(requested, QgsRectangle(139.8, 33.1, 139.9, 33.2))
+        self.feedback.pushWarning.assert_not_called()
+
+    def test_no_extent_loads_everything(self):
+        self._save_to_file({"OUTPUT": "TEMPORARY_OUTPUT"})
+        self._load_as_arcgis_layer({})
+
+        for mock in (
+            self.alg._create_arcgis_vector_layer,
+            self.alg._open_feature_stream,
+        ):
+            for call in mock.call_args_list:
+                self.assertIsNone(call.kwargs["extent"])
+        self.feedback.pushWarning.assert_not_called()
+
+    def test_extent_needs_the_service_crs(self):
+        self.alg._resolve_layer_url_and_meta.return_value = (
+            "https://example.com/FeatureServer/0",
+            {},
+            {},
+        )
+        parameters = {"EXTENT": self.IN_SOURCE_CRS, "OUTPUT": "TEMPORARY_OUTPUT"}
+        for load in (self._save_to_file, self._load_as_arcgis_layer):
+            with self.subTest(load=load.__name__):
+                with self.assertRaises(QgsProcessingException):
+                    load(parameters)
+
+    def test_warns_when_no_feature_is_in_the_extent(self):
+        self.alg._open_feature_stream.return_value = []
+        self._save_to_file({"EXTENT": self.IN_SOURCE_CRS, "OUTPUT": "TEMPORARY_OUTPUT"})
+
+        self.feedback.pushWarning.assert_called_once()
+
+    def test_warns_when_the_arcgis_layer_has_no_feature_in_the_extent(self):
+        empty = QgsVectorLayer(f"Point?crs={self.SOURCE_CRS}", "empty", "memory")
+        self.alg._create_arcgis_vector_layer.return_value = empty
+        self._load_as_arcgis_layer({"EXTENT": self.IN_SOURCE_CRS})
+
         self.feedback.pushWarning.assert_called_once()
 
 

@@ -19,6 +19,7 @@ from qgis.core import (
     QgsFeature,
     QgsGeometry,
     QgsProcessingException,
+    QgsRectangle,
     QgsWkbTypes,
 )
 from qgis.PyQt.QtCore import QMetaType, QThreadPool
@@ -61,6 +62,19 @@ class _QThreadPoolExecutor:
         self._pool.waitForDone()
 
 
+def envelope(extent: QgsRectangle) -> str:
+    """The extent as "xmin,ymin,xmax,ymax", as both ArcGIS and the QGIS provider read it."""
+    return ",".join(
+        str(value)
+        for value in (
+            extent.xMinimum(),
+            extent.yMinimum(),
+            extent.xMaximum(),
+            extent.yMaximum(),
+        )
+    )
+
+
 def _get_json(url: str, params: dict, feedback) -> dict:
     return get_json(f"{url}?{urlencode(params)}", feedback)
 
@@ -87,9 +101,12 @@ def _query(layer_url: str, params: dict, feedback) -> dict:
 
 
 class FeatureDownloader:
-    """Iterates over all features of an ArcGIS feature service layer in object ID order."""
+    """Iterates over the features of an ArcGIS feature service layer in object ID
+    order: all of them, or those intersecting an extent in the CRS of the layer."""
 
-    def __init__(self, layer_url, fields, wkb_type, feedback, page_size=None):
+    def __init__(
+        self, layer_url, fields, wkb_type, feedback, page_size=None, extent=None
+    ):
         if not layer_url.startswith(("https://", "http://")):
             raise ValueError(f"Unsupported URL scheme: {layer_url}")
         self.layer_url = layer_url
@@ -104,10 +121,27 @@ class FeatureDownloader:
             for i, field in enumerate(fields)
             if field.type() in (QMetaType.Type.QDateTime, QMetaType.Type.QDate)
         ]
+        # Without an inSR, the service reads the extent in the CRS of the layer.
+        # Unlike the bounding box test of the QGIS provider, this matches only
+        # the features whose geometry intersects the extent.
+        self.spatial_filter = (
+            {
+                "geometry": envelope(extent),
+                "geometryType": "esriGeometryEnvelope",
+                "spatialRel": "esriSpatialRelIntersects",
+            }
+            if extent is not None
+            else {}
+        )
 
         ids = _query(
             layer_url,
-            {"where": "1=1", "returnIdsOnly": "true", "f": "json"},
+            {
+                "where": "1=1",
+                "returnIdsOnly": "true",
+                "f": "json",
+                **self.spatial_filter,
+            },
             feedback,
         )
         self.oid_field = ids.get("objectIdFieldName")
@@ -139,12 +173,14 @@ class FeatureDownloader:
                 yield from self._convert(features, geometry_type)
 
     def _fetch(self, object_ids):
-        # object_ids is a sorted run of the layer's IDs, so this range matches exactly them
+        # object_ids is a sorted run of the IDs matching the spatial filter, so
+        # this range matches exactly them when the filter applies to it too
         page = _query(
             self.layer_url,
             {
                 "f": "json",
                 "where": f"{self.oid_field}>={object_ids[0]} AND {self.oid_field}<={object_ids[-1]}",
+                **self.spatial_filter,
                 "outFields": "*",
                 "returnGeometry": "true",
                 "returnM": "true" if self.has_m else "false",
